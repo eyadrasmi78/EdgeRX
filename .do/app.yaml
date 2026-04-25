@@ -87,6 +87,51 @@ services:
       - { key: LOG_CHANNEL,                 value: "stderr",                            scope: RUN_TIME }
       - { key: LOG_LEVEL,                   value: "info",                              scope: RUN_TIME }
 
+  # ─────────── Background scheduler worker ───────────
+  # Runs `php artisan schedule:work` continuously to fire scheduled commands:
+  #   - buying-groups:auto-release  (hourly)
+  #   - notifications:digest        (daily at 09:00 UTC)
+  # Waits for backend to finish migrating before starting (probes for buying_groups table).
+workers:
+  - name: scheduler
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    dockerfile_path: backend/Dockerfile
+    source_dir: backend
+    github:
+      repo: EyadRasmiMahmoud/EdgeRX2.0
+      branch: main
+      deploy_on_push: true
+    run_command: /usr/local/bin/edgerx-scheduler-entrypoint.sh
+    envs:
+      - { key: APP_NAME,                    value: "EdgeRX",                            scope: RUN_AND_BUILD_TIME }
+      - { key: APP_ENV,                     value: "production",                        scope: RUN_TIME }
+      - { key: APP_KEY,                     scope: RUN_AND_BUILD_TIME, type: SECRET }
+      - { key: APP_TIMEZONE,                value: "UTC",                               scope: RUN_TIME }
+      - { key: APP_URL,                     value: "https://edgerx.app",                scope: RUN_TIME }
+      - { key: FRONTEND_URL,                value: "https://edgerx.app",                scope: RUN_TIME }
+      - { key: DB_CONNECTION,               value: "pgsql",                             scope: RUN_TIME }
+      - { key: DB_HOST,                     value: "edgerx-pg-do-user-33183597-0.k.db.ondigitalocean.com", scope: RUN_TIME }
+      - { key: DB_PORT,                     value: "25060",                             scope: RUN_TIME }
+      - { key: DB_DATABASE,                 value: "edgerx",                            scope: RUN_TIME }
+      - { key: DB_USERNAME,                 value: "edgerx_user",                       scope: RUN_TIME }
+      - { key: DB_PASSWORD,                 scope: RUN_TIME, type: SECRET }
+      - { key: DB_SSLMODE,                  value: "require",                           scope: RUN_TIME }
+      - { key: SESSION_DRIVER,              value: "database",                          scope: RUN_TIME }
+      - { key: CACHE_STORE,                 value: "database",                          scope: RUN_TIME }
+      - { key: QUEUE_CONNECTION,            value: "database",                          scope: RUN_TIME }
+      # Mail config — needed for the digest command
+      - { key: MAIL_MAILER,                 value: "smtp",                              scope: RUN_TIME }
+      - { key: MAIL_HOST,                   value: "smtp.sendgrid.net",                 scope: RUN_TIME }
+      - { key: MAIL_PORT,                   value: "587",                               scope: RUN_TIME }
+      - { key: MAIL_USERNAME,               value: "apikey",                            scope: RUN_TIME }
+      - { key: MAIL_PASSWORD,               scope: RUN_TIME, type: SECRET }
+      - { key: MAIL_ENCRYPTION,             value: "tls",                               scope: RUN_TIME }
+      - { key: MAIL_FROM_ADDRESS,           value: "noreply@em.edgerx.app",             scope: RUN_TIME }
+      - { key: MAIL_FROM_NAME,              value: "EdgeRX",                            scope: RUN_TIME }
+      - { key: LOG_CHANNEL,                 value: "stderr",                            scope: RUN_TIME }
+      - { key: LOG_LEVEL,                   value: "info",                              scope: RUN_TIME }
+
   # ─────────── React SPA (static) ───────────
 static_sites:
   - name: frontend

@@ -679,6 +679,11 @@ export const SupplierPortal: React.FC<SupplierPortalProps> = ({
                                         <div className="flex items-center gap-1.5 mt-1 text-gray-400">
                                             <Hash size={10}/><span className="text-[10px] font-mono font-bold">{order.orderNumber}</span>
                                         </div>
+                                        {order.buyingGroupId && (
+                                            <span title={order.buyingGroupName || ''} className="mt-1 inline-flex items-center gap-1 self-start bg-purple-100 text-purple-800 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded">
+                                                <Users size={9}/> {t('group_buy_badge')}
+                                            </span>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-sm font-bold text-gray-600">{order.customerName}</td>

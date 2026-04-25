@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,6 +15,20 @@ return Application::configure(basePath: dirname(__DIR__))
         channels: __DIR__.'/../routes/channels.php',
         health: '/up',
     )
+    ->withSchedule(function (Schedule $schedule) {
+        // Sweep buying groups whose deadline passed: release if threshold met, else dissolve.
+        $schedule->command('buying-groups:auto-release')
+            ->hourly()
+            ->withoutOverlapping(10)
+            ->onOneServer();
+
+        // Daily notification digest — single email summarising the last 24h of activity.
+        // Runs at 09:00 UTC (12:00 Kuwait time = noon).
+        $schedule->command('notifications:digest')
+            ->dailyAt('09:00')
+            ->withoutOverlapping(15)
+            ->onOneServer();
+    })
     ->withMiddleware(function (Middleware $middleware) {
         // Sanctum SPA: stateful cookie auth on /api/*
         $middleware->statefulApi();

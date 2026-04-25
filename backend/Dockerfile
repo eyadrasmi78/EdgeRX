@@ -36,6 +36,7 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-di
     && chmod -R 775 storage bootstrap/cache
 EXPOSE 8080
 COPY docker-entrypoint.sh /usr/local/bin/edgerx-entrypoint.sh
-RUN chmod +x /usr/local/bin/edgerx-entrypoint.sh
+COPY docker-scheduler-entrypoint.sh /usr/local/bin/edgerx-scheduler-entrypoint.sh
+RUN chmod +x /usr/local/bin/edgerx-entrypoint.sh /usr/local/bin/edgerx-scheduler-entrypoint.sh
 # DO App Platform sets $PORT; default 8080
 CMD ["sh", "-c", "/usr/local/bin/edgerx-entrypoint.sh && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"]

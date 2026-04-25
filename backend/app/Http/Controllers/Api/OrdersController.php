@@ -21,7 +21,7 @@ class OrdersController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Order::with('statusHistory');
+        $query = Order::with(['statusHistory', 'placedBy', 'buyingGroup']);
 
         if ($user->isAdmin()) {
             // no scope
@@ -124,7 +124,7 @@ class OrdersController extends Controller
             ));
         }
 
-        return new OrderResource($order->load('statusHistory'));
+        return new OrderResource($order->load(['statusHistory', 'placedBy', 'buyingGroup']));
     }
 
     public function update(UpdateOrderRequest $request, $id)
@@ -188,6 +188,6 @@ class OrdersController extends Controller
             ));
         }
 
-        return new OrderResource($order->fresh()->load('statusHistory'));
+        return new OrderResource($order->fresh()->load(['statusHistory', 'placedBy', 'buyingGroup']));
     }
 }
