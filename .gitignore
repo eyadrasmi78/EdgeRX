@@ -1,5 +1,21 @@
-# Logs
-logs
+# --- secrets / env ---
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+*.pem
+secrets/
+.edgerx-secrets.env
+
+# --- node / vite ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# --- logs ---
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,18 +23,56 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# --- editor ---
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# --- claude / planning ---
+.claude/
+.planning/
+
+# --- laravel / php ---
+backend/vendor/
+backend/node_modules/
+backend/public/build/
+backend/public/hot/
+backend/public/storage
+backend/storage/*.key
+backend/storage/app/private/*
+!backend/storage/app/private/.gitkeep
+backend/storage/app/public/*
+!backend/storage/app/public/.gitkeep
+backend/storage/framework/cache/data/*
+!backend/storage/framework/cache/data/.gitkeep
+backend/storage/framework/sessions/*
+!backend/storage/framework/sessions/.gitkeep
+backend/storage/framework/testing/*
+!backend/storage/framework/testing/.gitkeep
+backend/storage/framework/views/*
+!backend/storage/framework/views/.gitkeep
+backend/storage/logs/*
+!backend/storage/logs/.gitkeep
+backend/bootstrap/cache/*.php
+backend/.phpunit.result.cache
+backend/.phpunit.cache
+backend/.php-cs-fixer.cache
+backend/composer.phar
+backend/auth.json
+backend/Homestead.json
+backend/Homestead.yaml
+backend/.vagrant
+backend/_ide_helper*.php
+backend/.phpstorm.meta.php
+backend/database/database.sqlite
+
+# --- docker / runtime ---
+docker/data/
+*.sqlite
+*.sqlite-journal
