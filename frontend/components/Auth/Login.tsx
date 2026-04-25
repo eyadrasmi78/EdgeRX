@@ -47,7 +47,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegist
     { label: 'Admin', email: 'admin', pass: 'admin' },
     { label: 'Local Supplier', email: 'supplier@mediglobal.com', pass: 'password' },
     { label: 'Customer', email: 'hospital@citygeneral.com', pass: 'password' },
-    { label: 'Foreign Supplier', email: 'global@biotech-germany.com', pass: 'password' }
+    { label: 'Foreign Supplier', email: 'global@biotech-germany.com', pass: 'password' },
+    { label: 'Pharmacy Master', email: 'master@gulfgroup.kw', pass: 'password' },
   ];
 
   const inputClasses = "appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-teal-500 focus:border-teal-500 focus:z-10 sm:text-sm transition-colors";

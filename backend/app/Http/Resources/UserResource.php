@@ -47,6 +47,23 @@ class UserResource extends JsonResource
                     // password not exposed
                 ]);
             }, []),
+            // For PHARMACY_MASTER users: the pharmacies they own.
+            // Empty array for everyone else.
+            'childPharmacies' => $this->whenLoaded('masterOf', function () {
+                return $this->masterOf->map(fn ($p) => [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                    'email' => $p->email,
+                    'phone' => $p->phone,
+                    'role' => $p->role,
+                    'status' => $p->status,
+                ]);
+            }, []),
+            // For CUSTOMER users that have a master: the master's id + name.
+            'master' => $this->whenLoaded('masteredBy', function () {
+                $m = $this->masteredBy->first();
+                return $m ? ['id' => $m->id, 'name' => $m->name] : null;
+            }, null),
         ];
     }
 }

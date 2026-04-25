@@ -264,7 +264,7 @@ export const DataService = {
   loadCart: async (): Promise<{ product: Product; quantity: number }[]> => {
     try { return await api.get('/cart'); } catch { return []; }
   },
-  saveCart: async (items: { productId: string; quantity: number }[]): Promise<void> => {
+  saveCart: async (items: { productId: string; quantity: number; onBehalfOfCustomerId?: string }[]): Promise<void> => {
     if (items.length === 0) {
       try { await api.del('/cart'); } catch {/* ignore */}
       return;
@@ -279,7 +279,14 @@ export const DataService = {
 
   /* ── ORDERS ─────────────────────────────────────────── */
   createOrder: async (order: Order): Promise<void> => {
-    await api.post('/orders', { productId: order.productId, quantity: order.quantity });
+    // Pharmacy Masters pass `placedByUserId` on the constructed Order; we forward
+    // it as `onBehalfOfCustomerId` so the backend records who is the buyer (customer)
+    // vs. who is the operator (master).
+    const body: any = { productId: order.productId, quantity: order.quantity };
+    if (order.customerId && order.customerId !== _currentUser?.id) {
+      body.onBehalfOfCustomerId = order.customerId;
+    }
+    await api.post('/orders', body);
     await refreshOrders();
   },
   updateOrder: async (orderId: string, updates: Partial<Order>, note?: string): Promise<void> => {
@@ -362,4 +369,41 @@ export const DataService = {
 
   /* ── NOTIFICATIONS ──────────────────────────────────── */
   refreshNotifications,
+
+  /* ── PHARMACY MASTER (Phase A) ──────────────────────── */
+  /** Admin: list all PHARMACY_MASTER accounts with their child pharmacies. */
+  listPharmacyGroups: async (): Promise<User[]> => {
+    try { return await api.get<User[]>('/admin/pharmacy-groups'); }
+    catch (e) { logSliceError('pharmacy-groups', e); return []; }
+  },
+  /** Admin: create a Pharmacy Master account and link initial pharmacies. */
+  createPharmacyGroup: async (payload: {
+    name: string; email: string; password: string; phone?: string; pharmacyIds?: string[];
+  }): Promise<{ success: boolean; user?: User; message?: string }> => {
+    try {
+      const u = await api.post<User>('/admin/pharmacy-groups', payload);
+      return { success: true, user: u };
+    } catch (e: any) {
+      return { success: false, message: e?.data?.message || 'Could not create pharmacy group' };
+    }
+  },
+  /** Admin: link an existing pharmacy to a master. */
+  linkPharmacyToGroup: async (masterId: string, pharmacyId: string) => {
+    try {
+      await api.post(`/admin/pharmacy-groups/${masterId}/pharmacies`, { pharmacyId });
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e?.data?.message || 'Could not link pharmacy' };
+    }
+  },
+  /** Admin: unlink a pharmacy from a master. */
+  unlinkPharmacyFromGroup: async (masterId: string, pharmacyId: string) => {
+    try { await api.del(`/admin/pharmacy-groups/${masterId}/pharmacies/${pharmacyId}`); return { success: true }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  /** Admin: delete a master (children stay, just unlinked). */
+  deletePharmacyGroup: async (masterId: string) => {
+    try { await api.del(`/admin/pharmacy-groups/${masterId}`); return { success: true }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
 };

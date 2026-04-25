@@ -16,8 +16,15 @@ class ChatsController extends Controller
     {
         $user = $request->user();
         $orderQuery = Order::query();
-        if ($user->isCustomer()) $orderQuery->where('customer_id', $user->id);
-        elseif ($user->isSupplier()) $orderQuery->where('supplier_id', $user->id);
+        if ($user->isCustomer()) {
+            $orderQuery->where('customer_id', $user->id);
+        } elseif ($user->isSupplier()) {
+            $orderQuery->where('supplier_id', $user->id);
+        } elseif ($user->isPharmacyMaster()) {
+            $childIds = $user->masterOf()->pluck('users.id');
+            $orderQuery->whereIn('customer_id', $childIds);
+        }
+        // Admin: no scope (sees all)
         $orderIds = $orderQuery->pluck('id');
 
         $rooms = ChatRoom::whereIn('order_id', $orderIds)
@@ -62,7 +69,13 @@ class ChatsController extends Controller
     {
         $user = $request->user();
         $order = Order::findOrFail($orderId);
-        if (!$user->isAdmin() && $order->customer_id !== $user->id && $order->supplier_id !== $user->id) {
+
+        $authorized = $user->isAdmin()
+            || $order->customer_id === $user->id
+            || $order->supplier_id === $user->id
+            || ($user->isPharmacyMaster() && $user->ownsPharmacy($order->customer_id));
+
+        if (!$authorized) {
             abort(403, 'Forbidden.');
         }
     }

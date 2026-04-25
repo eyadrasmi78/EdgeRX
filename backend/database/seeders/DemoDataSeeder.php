@@ -30,6 +30,7 @@ class DemoDataSeeder extends Seeder
         DB::transaction(function () {
             $this->seedUsers();
             $this->seedProducts();
+            $this->seedPharmacyMaster();
             $this->seedOrders();
             $this->seedFeed();
         });
@@ -496,6 +497,117 @@ class DemoDataSeeder extends Seeder
         ];
         foreach ($logs as $l) {
             OrderHistoryLog::create(array_merge(['order_id' => 'o1'], $l));
+        }
+
+        // ── Pharmacy Master historical orders (Phase A demo) ──
+        // These are placed by master m1 on behalf of pharmazone1..3 to showcase the audit trail.
+        $masterOrders = [
+            [
+                'id' => 'om1', 'order_number' => 'ORD-2026-PMG001',
+                'product_id' => 'p1', 'product_name' => 'Amoxicillin 500mg',
+                'customer_id' => 'pz1', 'customer_name' => 'PharmaZone 1 (Salmiya)',
+                'supplier_id' => '2',  'supplier_name' => 'MediGlobal Suppliers',
+                'placed_by_user_id' => 'm1',
+                'quantity' => 50, 'bonus_quantity' => 2, 'unit_of_measurement' => 'Box',
+                'status' => 'Completed', 'date' => '2026-04-10T09:00:00Z',
+            ],
+            [
+                'id' => 'om2', 'order_number' => 'ORD-2026-PMG002',
+                'product_id' => 'p1', 'product_name' => 'Amoxicillin 500mg',
+                'customer_id' => 'pz2', 'customer_name' => 'PharmaZone 2 (Hawalli)',
+                'supplier_id' => '2',  'supplier_name' => 'MediGlobal Suppliers',
+                'placed_by_user_id' => 'm1',
+                'quantity' => 60, 'bonus_quantity' => 3, 'unit_of_measurement' => 'Box',
+                'status' => 'Shipment On The Way', 'date' => '2026-04-12T11:00:00Z',
+            ],
+            [
+                'id' => 'om3', 'order_number' => 'ORD-2026-PMG003',
+                'product_id' => 'p6', 'product_name' => 'Vitamin C 1000mg Effervescent',
+                'customer_id' => 'pz3', 'customer_name' => 'PharmaZone 3 (Salmiya)',
+                'supplier_id' => '5',  'supplier_name' => 'Gulf Health Agents',
+                'placed_by_user_id' => 'm1',
+                'quantity' => 100, 'bonus_quantity' => 10, 'unit_of_measurement' => 'Tube',
+                'status' => 'In Progress', 'date' => '2026-04-18T14:30:00Z',
+            ],
+        ];
+        foreach ($masterOrders as $o) {
+            // Skip cleanly if pharmacy_master users don't exist yet (e.g. seedPharmacyMaster wasn't run)
+            $exists = \App\Models\User::where('id', $o['customer_id'])->exists()
+                && \App\Models\User::where('id', $o['placed_by_user_id'])->exists();
+            if (!$exists) continue;
+            Order::updateOrCreate(['id' => $o['id']], $o);
+            OrderHistoryLog::where('order_id', $o['id'])->delete();
+            OrderHistoryLog::create([
+                'order_id' => $o['id'],
+                'status' => 'Received',
+                'timestamp' => $o['date'],
+                'note' => "Placed by Gulf Pharmacy Group (master) on behalf of {$o['customer_name']}",
+            ]);
+            if ($o['status'] !== 'Received') {
+                OrderHistoryLog::create([
+                    'order_id' => $o['id'],
+                    'status' => 'In Progress',
+                    'timestamp' => date('c', strtotime($o['date']) + 86400),
+                ]);
+            }
+            if (in_array($o['status'], ['Completed', 'Shipment On The Way'], true)) {
+                OrderHistoryLog::create([
+                    'order_id' => $o['id'],
+                    'status' => $o['status'],
+                    'timestamp' => date('c', strtotime($o['date']) + 86400 * 2),
+                ]);
+            }
+        }
+    }
+
+    /* ──────────────── PHARMACY MASTER GROUP (Phase A demo) ──────────────── */
+    private function seedPharmacyMaster(): void
+    {
+        // Master account
+        $master = [
+            'id' => 'm1',
+            'name' => 'Gulf Pharmacy Group',
+            'email' => 'master@gulfgroup.kw',
+            'password' => Hash::make('password', ['rounds' => 4]),
+            'phone' => '+965-2222-1000',
+            'role' => 'PHARMACY_MASTER',
+            'status' => 'APPROVED',
+        ];
+        \App\Models\User::updateOrCreate(['id' => $master['id']], $master);
+
+        // 4 child pharmacies — independent CUSTOMER accounts, each can log in directly
+        $pharmacies = [
+            ['id' => 'pz1', 'name' => 'PharmaZone 1 (Salmiya)',     'email' => 'pharmazone1@example.com', 'address' => 'Salmiya, Block 4, Kuwait'],
+            ['id' => 'pz2', 'name' => 'PharmaZone 2 (Hawalli)',     'email' => 'pharmazone2@example.com', 'address' => 'Hawalli, Tunis St., Kuwait'],
+            ['id' => 'pz3', 'name' => 'PharmaZone 3 (Salmiya)',     'email' => 'pharmazone3@example.com', 'address' => 'Salmiya, Block 11, Kuwait'],
+            ['id' => 'pz4', 'name' => 'PharmaZone 4 (Farwaniya)',   'email' => 'pharmazone4@example.com', 'address' => 'Farwaniya, Kuwait'],
+        ];
+        foreach ($pharmacies as $p) {
+            \App\Models\User::updateOrCreate(['id' => $p['id']], [
+                'id' => $p['id'],
+                'name' => $p['name'],
+                'email' => $p['email'],
+                'password' => Hash::make('password', ['rounds' => 4]),
+                'phone' => '+965-9999-' . substr($p['id'], -3),
+                'role' => 'CUSTOMER',
+                'status' => 'APPROVED',
+            ]);
+            CompanyDetails::updateOrCreate(
+                ['user_id' => $p['id']],
+                ['user_id' => $p['id'], 'address' => $p['address'], 'website' => 'pharmazone.kw'],
+            );
+        }
+
+        // Link all 4 to the master (idempotent)
+        DB::table('pharmacy_group_members')
+            ->where('master_user_id', $master['id'])
+            ->whereNotIn('pharmacy_user_id', array_column($pharmacies, 'id'))
+            ->delete();
+        foreach ($pharmacies as $p) {
+            DB::table('pharmacy_group_members')->updateOrInsert(
+                ['master_user_id' => $master['id'], 'pharmacy_user_id' => $p['id']],
+                ['joined_at' => now()],
+            );
         }
     }
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product, Order, OrderStatus } from '../types';
+import { Product, Order, OrderStatus, User as UserType, ChildPharmacy, UserRole } from '../types';
 import { AIService } from '../services/aiService';
 import { DataService } from '../services/mockData';
 import { X, ShoppingCart, Sparkles, Loader2, FileText, Activity, Globe, Package, Video, Play, ChevronLeft, ChevronRight, Image as ImageIcon, Phone, MessageCircle, Mail, User, CheckCircle, Languages, ChevronRight as ChevronRightIcon, Gift, Download, FileCheck, Handshake } from 'lucide-react';
@@ -9,11 +9,18 @@ import { useLanguage } from '../contexts/LanguageContext';
 interface ProductModalProps {
   product: Product;
   onClose: () => void;
-  onRequestOrder: (product: Product, quantity: number) => void;
-  viewMode?: 'order' | 'interest'; // New mode prop
+  /**
+   * Called once per (pharmacy, quantity) pair the user wants to add.
+   * - Non-masters: called once with no customerId (defaults to the requester).
+   * - Pharmacy Masters: called once per selected child pharmacy with that pharmacy's id.
+   */
+  onRequestOrder: (product: Product, quantity: number, customerId?: string) => void;
+  viewMode?: 'order' | 'interest';
+  /** Pass the current user so the modal can render the multi-pharmacy grid for masters. */
+  currentUser?: UserType;
 }
 
-export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onRequestOrder, viewMode = 'order' }) => {
+export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onRequestOrder, viewMode = 'order', currentUser }) => {
   const { t, dir } = useLanguage();
   const [quantity, setQuantity] = useState<number>(1);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -26,6 +33,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
   const [translatedDesc, setTranslatedDesc] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
 
+  // Pharmacy Master multi-pharmacy state — keyed by pharmacy id; only items with qty > 0 get added to cart.
+  const isMaster = currentUser?.role === UserRole.PHARMACY_MASTER;
+  const childPharmacies: ChildPharmacy[] = currentUser?.childPharmacies ?? [];
+  const [perPharmacyQty, setPerPharmacyQty] = useState<Record<string, number>>({});
+
   // Combine main image and gallery images into one list for the carousel
   const allImages = [product.image, ...(product.images || [])].filter(Boolean);
 
@@ -36,6 +48,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
       setQuantity(1);
       setTranslatedDesc(null);
       setIsTranslating(false);
+      setPerPharmacyQty({});
   }, [product]);
 
   // Bonus Calculation Logic
@@ -51,17 +64,43 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
       }
   }, [product, quantity]);
 
+  // Aggregate the master's per-pharmacy selection so we can show totals + drive button enablement.
+  const masterSelection = useMemo(() => {
+    const entries = Object.entries(perPharmacyQty).filter(([_id, q]) => q > 0);
+    const totalQty = entries.reduce((sum, [_id, q]) => sum + q, 0);
+    let totalBonus = 0;
+    if (product.bonusThreshold && product.bonusValue) {
+      for (const [, q] of entries) {
+        if (q >= product.bonusThreshold) {
+          totalBonus += product.bonusType === 'fixed'
+            ? product.bonusValue
+            : Math.floor(q * (product.bonusValue / 100));
+        }
+      }
+    }
+    return { entries, totalQty, totalBonus, count: entries.length };
+  }, [perPharmacyQty, product]);
+
   const handleRequest = () => {
+    if (isMaster && childPharmacies.length > 0) {
+      if (masterSelection.entries.length === 0) return;
+      // Submit one onRequestOrder call per selected child pharmacy
+      masterSelection.entries.forEach(([pharmacyId, qty]) => {
+        onRequestOrder(product, qty, pharmacyId);
+      });
+      setItemAdded(true);
+      setPerPharmacyQty({});
+      setTimeout(() => setItemAdded(false), 2000);
+      return;
+    }
     onRequestOrder(product, quantity);
-    
-    // Show confirmation and reset quantity
     setItemAdded(true);
     setQuantity(1);
-    
-    // Reset the success message after 3 seconds
-    setTimeout(() => {
-      setItemAdded(false);
-    }, 2000);
+    setTimeout(() => setItemAdded(false), 2000);
+  };
+
+  const setPharmQty = (pharmacyId: string, q: number) => {
+    setPerPharmacyQty(prev => ({ ...prev, [pharmacyId]: Math.max(0, q) }));
   };
 
   const handleAiAnalysis = async () => {
@@ -399,80 +438,166 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
                 </div>
 
                 {/* Footer Action */}
-                <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center gap-3 shrink-0 safe-area-bottom">
-                    {viewMode === 'order' ? (
+                <div className="p-4 border-t border-gray-200 bg-gray-50 flex flex-col gap-3 shrink-0 safe-area-bottom">
+                    {viewMode === 'order' && isMaster && childPharmacies.length > 0 ? (
+                        /* ── Pharmacy Master multi-pharmacy mode ── */
                         <>
-                            <div className="flex items-center bg-white border border-gray-300 rounded-lg h-10 shadow-sm shrink-0">
-                                <button 
-                                className="px-3 h-full hover:bg-gray-100 text-gray-600 font-bold border-r rtl:border-l rtl:border-r-0 disabled:opacity-50"
-                                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                disabled={itemAdded}
-                                >
-                                -
-                                </button>
-                                <input 
-                                type="number" 
-                                className="w-16 h-full text-center border-none focus:ring-0 text-gray-800"
-                                value={quantity}
-                                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                                disabled={itemAdded}
-                                />
-                                <button 
-                                className="px-3 h-full hover:bg-gray-100 text-gray-600 font-bold border-l rtl:border-l-0 rtl:border-r disabled:opacity-50"
-                                onClick={() => setQuantity(quantity + 1)}
-                                disabled={itemAdded}
-                                >
-                                +
-                                </button>
+                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                                {t('add_to_cart_for')}
                             </div>
-                            
-                            <div className="flex flex-col">
-                                <span className="text-sm font-medium text-gray-500">{product.unitOfMeasurement}s</span>
-                                {bonusQuantity > 0 && (
-                                    <span className="text-xs font-bold text-pink-600 flex items-center gap-1">
-                                        + {bonusQuantity} {t('free_items')}
-                                    </span>
-                                )}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[180px] overflow-y-auto pr-1">
+                                {childPharmacies.map(p => {
+                                    const qty = perPharmacyQty[p.id] || 0;
+                                    const isSelected = qty > 0;
+                                    const pharmacyBonus = product.bonusThreshold && product.bonusValue && qty >= product.bonusThreshold
+                                        ? (product.bonusType === 'fixed'
+                                            ? product.bonusValue
+                                            : Math.floor(qty * (product.bonusValue / 100)))
+                                        : 0;
+                                    return (
+                                        <div
+                                            key={p.id}
+                                            className={`flex items-center gap-2 bg-white border rounded-lg p-2 transition-colors ${isSelected ? 'border-teal-500 ring-1 ring-teal-500' : 'border-gray-200'}`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={(e) => setPharmQty(p.id, e.target.checked ? Math.max(1, qty) : 0)}
+                                                className="h-4 w-4 rounded text-teal-600 focus:ring-teal-500 shrink-0"
+                                            />
+                                            <span className="text-xs font-bold text-gray-800 flex-1 truncate" title={p.name}>{p.name}</span>
+                                            <div className="flex items-center bg-gray-50 border border-gray-300 rounded h-7 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    className="px-1.5 h-full text-gray-600 hover:bg-gray-100 disabled:opacity-30"
+                                                    onClick={() => setPharmQty(p.id, qty - 1)}
+                                                    disabled={qty <= 0 || itemAdded}
+                                                >−</button>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    className="w-12 h-full text-center text-xs bg-transparent border-none focus:ring-0 text-gray-800"
+                                                    value={qty}
+                                                    onChange={(e) => setPharmQty(p.id, parseInt(e.target.value) || 0)}
+                                                    disabled={itemAdded}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="px-1.5 h-full text-gray-600 hover:bg-gray-100"
+                                                    onClick={() => setPharmQty(p.id, qty + 1)}
+                                                    disabled={itemAdded}
+                                                >+</button>
+                                            </div>
+                                            {pharmacyBonus > 0 && (
+                                                <span className="text-[9px] font-bold text-pink-600 whitespace-nowrap">+{pharmacyBonus}</span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            {masterSelection.count > 0 && (
+                                <div className="flex items-center justify-between text-[11px] text-gray-600 px-1">
+                                    <span>{masterSelection.count} {masterSelection.count === 1 ? 'pharmacy' : 'pharmacies'} • {masterSelection.totalQty} {product.unitOfMeasurement}s total</span>
+                                    {masterSelection.totalBonus > 0 && (
+                                        <span className="font-bold text-pink-600">+ {masterSelection.totalBonus} {t('free_items')}</span>
+                                    )}
+                                </div>
+                            )}
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={onClose}
+                                    className="h-10 px-4 rounded-lg font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 shadow-sm transition-colors"
+                                >
+                                    {t('close')}
+                                </button>
+                                <button
+                                    onClick={handleRequest}
+                                    disabled={product.stockLevel === 0 || itemAdded || masterSelection.count === 0}
+                                    className={`flex-1 h-10 rounded-lg font-medium text-white flex items-center justify-center gap-2 transition-all shadow-md
+                                        ${itemAdded
+                                            ? 'bg-green-600 shadow-none cursor-default'
+                                            : (product.stockLevel > 0 && masterSelection.count > 0)
+                                                ? 'bg-teal-600 hover:bg-teal-700 hover:shadow-lg'
+                                                : 'bg-gray-400 cursor-not-allowed'}`}
+                                >
+                                    {itemAdded ? (
+                                        <><CheckCircle size={18} /> {t('item_added')}</>
+                                    ) : (
+                                        <><ShoppingCart size={18} />
+                                          {product.stockLevel === 0 ? t('unavailable') : `${t('add_to_cart')} (${masterSelection.count})`}
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         </>
                     ) : (
-                        <div className="text-xs text-gray-500 flex-1">
-                            Express interest to discuss distribution rights.
+                        /* ── Standard single-quantity mode ── */
+                        <div className="flex items-center gap-3">
+                            {viewMode === 'order' ? (
+                                <>
+                                    <div className="flex items-center bg-white border border-gray-300 rounded-lg h-10 shadow-sm shrink-0">
+                                        <button
+                                            className="px-3 h-full hover:bg-gray-100 text-gray-600 font-bold border-r rtl:border-l rtl:border-r-0 disabled:opacity-50"
+                                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                            disabled={itemAdded}
+                                        >−</button>
+                                        <input
+                                            type="number"
+                                            className="w-16 h-full text-center border-none focus:ring-0 text-gray-800"
+                                            value={quantity}
+                                            onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                            disabled={itemAdded}
+                                        />
+                                        <button
+                                            className="px-3 h-full hover:bg-gray-100 text-gray-600 font-bold border-l rtl:border-l-0 rtl:border-r disabled:opacity-50"
+                                            onClick={() => setQuantity(quantity + 1)}
+                                            disabled={itemAdded}
+                                        >+</button>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-medium text-gray-500">{product.unitOfMeasurement}s</span>
+                                        {bonusQuantity > 0 && (
+                                            <span className="text-xs font-bold text-pink-600 flex items-center gap-1">
+                                                + {bonusQuantity} {t('free_items')}
+                                            </span>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-xs text-gray-500 flex-1">
+                                    Express interest to discuss distribution rights.
+                                </div>
+                            )}
+
+                            <button
+                                onClick={onClose}
+                                className="ml-auto h-10 px-4 rounded-lg font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 shadow-sm transition-colors"
+                            >
+                                {t('close')}
+                            </button>
+
+                            <button
+                                onClick={handleRequest}
+                                disabled={(viewMode === 'order' && product.stockLevel === 0) || itemAdded}
+                                className={`flex-1 h-10 rounded-lg font-medium text-white flex items-center justify-center gap-2 transition-all shadow-md
+                                    ${itemAdded
+                                        ? 'bg-green-600 shadow-none cursor-default'
+                                        : (viewMode === 'interest' || product.stockLevel > 0)
+                                            ? 'bg-teal-600 hover:bg-teal-700 hover:shadow-lg'
+                                            : 'bg-gray-400 cursor-not-allowed'}`}
+                            >
+                                {itemAdded ? (
+                                    <><CheckCircle size={18} /> {viewMode === 'interest' ? 'Interest Sent' : t('item_added')}</>
+                                ) : viewMode === 'interest' ? (
+                                    <><Handshake size={18} /> Express Interest</>
+                                ) : (
+                                    <><ShoppingCart size={18} />
+                                      {product.stockLevel > 0 ? t('add_to_cart') : t('unavailable')}
+                                    </>
+                                )}
+                            </button>
                         </div>
                     )}
-
-                    <button
-                        onClick={onClose}
-                        className="ml-auto h-10 px-4 rounded-lg font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 shadow-sm transition-colors"
-                    >
-                        {t('close')}
-                    </button>
-                    
-                    <button
-                        onClick={handleRequest}
-                        disabled={(viewMode === 'order' && product.stockLevel === 0) || itemAdded}
-                        className={`flex-1 h-10 rounded-lg font-medium text-white flex items-center justify-center gap-2 transition-all shadow-md
-                        ${itemAdded 
-                            ? 'bg-green-600 shadow-none cursor-default'
-                            : (viewMode === 'interest' || product.stockLevel > 0)
-                                ? 'bg-teal-600 hover:bg-teal-700 hover:shadow-lg' 
-                                : 'bg-gray-400 cursor-not-allowed'}`}
-                    >
-                        {itemAdded ? (
-                            <>
-                                <CheckCircle size={18} /> {viewMode === 'interest' ? 'Interest Sent' : t('item_added')}
-                            </>
-                        ) : viewMode === 'interest' ? (
-                            <>
-                                <Handshake size={18} /> Express Interest
-                            </>
-                        ) : (
-                            <>
-                                <ShoppingCart size={18} />
-                                {product.stockLevel > 0 ? t('add_to_cart') : t('unavailable')}
-                            </>
-                        )}
-                    </button>
                 </div>
 
             </div>

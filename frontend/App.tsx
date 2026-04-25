@@ -42,7 +42,7 @@ export function App() {
         if (session.user) {
           setUser(session.user);
           // Restore the persisted cart from the server so a refresh doesn't drop it.
-          if (session.user.role === UserRole.CUSTOMER) {
+          if (session.user.role === UserRole.CUSTOMER || session.user.role === UserRole.PHARMACY_MASTER) {
             const items = await DataService.loadCart();
             if (items.length) setCart(items);
           }
@@ -55,11 +55,18 @@ export function App() {
     })();
   }, []);
 
-  // Persist cart to server whenever it changes (debounced + skip during boot/logout)
+  // Persist cart to server whenever it changes (debounced + skip during boot/logout).
+  // CUSTOMERS persist their own cart; PHARMACY_MASTERS persist a multi-pharmacy cart
+  // where each line carries onBehalfOfCustomerId.
   useEffect(() => {
-    if (isBooting || !user || user.role !== UserRole.CUSTOMER) return;
+    if (isBooting || !user) return;
+    if (user.role !== UserRole.CUSTOMER && user.role !== UserRole.PHARMACY_MASTER) return;
     const handle = setTimeout(() => {
-      DataService.saveCart(cart.map(c => ({ productId: c.product.id, quantity: c.quantity })));
+      DataService.saveCart(cart.map(c => ({
+        productId: c.product.id,
+        quantity: c.quantity,
+        onBehalfOfCustomerId: c.onBehalfOfCustomerId ?? user.id,
+      })));
     }, 400);
     return () => clearTimeout(handle);
   }, [cart, isBooting, user]);
@@ -152,28 +159,49 @@ export function App() {
 
   const unreadCount = serverNotifications.filter(n => !n.readAt).length;
 
-  const handleAddToCart = (product: Product, quantity: number) => {
+  const handleAddToCart = (product: Product, quantity: number, customerId?: string) => {
+    // Pharmacy Master flow: customerId targets one of the child pharmacies. Each
+    // (product, customerId) pair is its own cart line so the master can have the
+    // same product staged for different children with different quantities.
+    const onBehalf = customerId ?? user?.id;
+    const onBehalfName = customerId
+      ? user?.childPharmacies?.find(p => p.id === customerId)?.name
+      : undefined;
+
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      const existing = prev.find(item =>
+        item.product.id === product.id && (item.onBehalfOfCustomerId ?? user?.id) === onBehalf
+      );
       if (existing) {
-        return prev.map(item => 
-          item.product.id === product.id 
+        return prev.map(item =>
+          item.product.id === product.id && (item.onBehalfOfCustomerId ?? user?.id) === onBehalf
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       }
-      return [...prev, { product, quantity }];
+      return [...prev, {
+        product,
+        quantity,
+        onBehalfOfCustomerId: customerId,
+        onBehalfOfCustomerName: onBehalfName,
+      }];
     });
     setIsCartOpen(true);
     addNotification(t('item_added'), 'success');
   };
 
-  const handleRemoveFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
+  const handleRemoveFromCart = (productId: string, customerId?: string) => {
+    setCart(prev => prev.filter(item =>
+      !(item.product.id === productId && (item.onBehalfOfCustomerId ?? null) === (customerId ?? null))
+    ));
   };
 
-  const handleUpdateCartQuantity = (productId: string, quantity: number) => {
-    setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity } : item));
+  const handleUpdateCartQuantity = (productId: string, quantity: number, customerId?: string) => {
+    setCart(prev => prev.map(item =>
+      item.product.id === productId && (item.onBehalfOfCustomerId ?? null) === (customerId ?? null)
+        ? { ...item, quantity }
+        : item
+    ));
   };
 
   const handleCheckout = async () => {
@@ -181,13 +209,17 @@ export function App() {
 
     try {
       // Each cart line becomes one order via POST /api/orders.
+      // For Pharmacy Masters, customerId is the child pharmacy id (apiClient.createOrder
+      // forwards it as onBehalfOfCustomerId on the wire).
       for (const item of cart) {
+        const customerId = item.onBehalfOfCustomerId ?? user.id;
+        const customerName = item.onBehalfOfCustomerName ?? user.name;
         const order: Order = {
           id: '', orderNumber: '',
           productId: item.product.id,
           productName: item.product.name,
-          customerId: user.id,
-          customerName: user.name,
+          customerId,
+          customerName,
           supplierName: item.product.supplierName,
           quantity: item.quantity,
           unitOfMeasurement: item.product.unitOfMeasurement,
@@ -199,7 +231,7 @@ export function App() {
       setOrders(DataService.getOrders());
       setCart([]);
       addNotification('Orders placed successfully!', 'success');
-      setActiveView(user.role === UserRole.CUSTOMER ? 'my_requests' : 'orders');
+      setActiveView(user.role === UserRole.CUSTOMER || user.role === UserRole.PHARMACY_MASTER ? 'my_requests' : 'orders');
     } catch {
       addNotification('Failed to place orders. Please try again.', 'warning');
     }
@@ -260,7 +292,7 @@ export function App() {
     
     const common = [{ id: 'home', label: t('nav_home'), icon: Home }];
 
-    if (user.role === UserRole.CUSTOMER) {
+    if (user.role === UserRole.CUSTOMER || user.role === UserRole.PHARMACY_MASTER) {
       return [
         ...common,
         { id: 'catalog', label: t('nav_catalog'), icon: LayoutGrid },
@@ -304,8 +336,8 @@ export function App() {
         return <Dashboard currentUser={user} orders={orders} products={products} />;
     }
 
-    // Customer Views
-    if (user.role === UserRole.CUSTOMER) {
+    // Customer + Pharmacy Master share the same screens (master sees aggregate from all child pharmacies)
+    if (user.role === UserRole.CUSTOMER || user.role === UserRole.PHARMACY_MASTER) {
         switch (activeView) {
             case 'catalog':
                 return <CustomerPortal products={products} onRequestOrder={handleAddToCart} currentUser={user} orders={orders} onUpdateProfile={handleUpdateProfile} />;
@@ -566,7 +598,7 @@ export function App() {
                   )}
               </div>
 
-              {user.role === UserRole.CUSTOMER && (
+              {(user.role === UserRole.CUSTOMER || user.role === UserRole.PHARMACY_MASTER) && (
                 <button 
                   className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors"
                   onClick={() => setIsCartOpen(true)}
