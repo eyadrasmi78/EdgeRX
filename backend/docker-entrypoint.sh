@@ -17,20 +17,21 @@ echo "DB_SSLMODE=${DB_SSLMODE:-?}"
 echo "─────────────────────────────────────────────"
 
 # Wait until Postgres accepts connections (firewall propagation can lag).
+# IMPORTANT: PG uses single-quoted strings; double-quoted things are identifiers.
 echo "Probing DB connectivity..."
 i=0
-until php -r '
-$dsn = "pgsql:host=" . getenv("DB_HOST") . ";port=" . getenv("DB_PORT") . ";dbname=" . getenv("DB_DATABASE") . ";sslmode=" . (getenv("DB_SSLMODE") ?: "require");
+until php -r "
+\$dsn = 'pgsql:host=' . getenv('DB_HOST') . ';port=' . getenv('DB_PORT') . ';dbname=' . getenv('DB_DATABASE') . ';sslmode=' . (getenv('DB_SSLMODE') ?: 'require');
 try {
-    $pdo = new PDO($dsn, getenv("DB_USERNAME"), getenv("DB_PASSWORD"), [PDO::ATTR_TIMEOUT => 5]);
-    $row = $pdo->query("SELECT current_database() AS db, current_user AS u, has_schema_privilege(current_user, \"public\", \"CREATE\") AS can_create_in_public")->fetch(PDO::FETCH_ASSOC);
-    echo "  current_database=" . $row["db"] . " current_user=" . $row["u"] . " can_create_in_public=" . ($row["can_create_in_public"] ? "yes" : "NO") . PHP_EOL;
+    \$pdo = new PDO(\$dsn, getenv('DB_USERNAME'), getenv('DB_PASSWORD'), [PDO::ATTR_TIMEOUT => 5]);
+    \$row = \$pdo->query(\"SELECT current_database() AS db, current_user AS u, has_schema_privilege(current_user, 'public', 'CREATE') AS can_create_in_public\")->fetch(PDO::FETCH_ASSOC);
+    echo '  current_database=' . \$row['db'] . ' current_user=' . \$row['u'] . ' can_create_in_public=' . (\$row['can_create_in_public'] ? 'yes' : 'NO') . PHP_EOL;
     exit(0);
-} catch (Throwable $e) {
-    echo "  PDO error: " . $e->getMessage() . PHP_EOL;
+} catch (Throwable \$e) {
+    echo '  PDO error: ' . \$e->getMessage() . PHP_EOL;
     exit(1);
 }
-'; do
+"; do
     i=$((i + 1))
     if [ $i -ge 12 ]; then
         echo "ERROR: DB still unreachable after 60s — bailing out"
