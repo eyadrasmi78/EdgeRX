@@ -67,7 +67,17 @@ class OrdersController extends Controller
         // Auto-create chat room for the order so chat works immediately
         ChatRoom::firstOrCreate(['order_id' => $order->id]);
 
-        // event(new \App\Events\OrderCreated($order));
+        // Notify the supplier
+        if ($order->supplier_id) {
+            $supplier = \App\Models\User::find($order->supplier_id);
+            $supplier?->notify(new \App\Notifications\EdgeRxNotification(
+                kind: 'order_created',
+                title: 'New order received',
+                message: "{$order->customer_name} placed an order for {$order->quantity} × {$order->product_name} ({$order->order_number}).",
+                actionUrl: rtrim(env('FRONTEND_URL', 'http://localhost'), '/') . '/',
+                data: ['orderId' => $order->id, 'orderNumber' => $order->order_number],
+            ));
+        }
 
         return new OrderResource($order->load('statusHistory'));
     }
@@ -112,7 +122,21 @@ class OrdersController extends Controller
         if (array_key_exists('bonusQuantity', $data))   $order->bonus_quantity = $data['bonusQuantity'];
 
         $order->save();
-        // event(new \App\Events\OrderStatusChanged($order));
+
+        // Notify the OTHER party of the status change
+        $isSupplierActing = $user->id === $order->supplier_id;
+        $recipientId = $isSupplierActing ? $order->customer_id : $order->supplier_id;
+        if ($recipientId) {
+            $recipient = \App\Models\User::find($recipientId);
+            $recipient?->notify(new \App\Notifications\EdgeRxNotification(
+                kind: 'order_status_changed',
+                title: "Order {$order->order_number} updated",
+                message: "Status is now: {$order->status}." . (!empty($data['note']) ? " Note: {$data['note']}" : ''),
+                actionUrl: rtrim(env('FRONTEND_URL', 'http://localhost'), '/') . '/',
+                data: ['orderId' => $order->id, 'orderNumber' => $order->order_number, 'status' => $order->status],
+            ));
+        }
+
         return new OrderResource($order->fresh()->load('statusHistory'));
     }
 }

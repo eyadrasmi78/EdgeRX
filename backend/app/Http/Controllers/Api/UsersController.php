@@ -28,8 +28,30 @@ class UsersController extends Controller
     {
         $data = $request->validate(['status' => 'required|in:PENDING,APPROVED,REJECTED']);
         $user = User::findOrFail($id);
+        $previousStatus = $user->status;
         $user->update(['status' => $data['status']]);
-        // event(new \App\Events\UserStatusChanged($user));
+
+        if ($previousStatus !== $data['status']) {
+            $kind = strtolower("registration_{$data['status']}");
+            $title = match ($data['status']) {
+                'APPROVED' => 'Your EdgeRX account is approved',
+                'REJECTED' => 'Your EdgeRX registration was not approved',
+                default    => 'Your EdgeRX account status changed',
+            };
+            $message = match ($data['status']) {
+                'APPROVED' => 'Welcome aboard. You can now log in and start using EdgeRX.',
+                'REJECTED' => 'After review, your registration was not approved. Please contact support if you believe this is a mistake.',
+                default    => "Your account status is now {$data['status']}.",
+            };
+            $user->notify(new \App\Notifications\EdgeRxNotification(
+                kind: $kind,
+                title: $title,
+                message: $message,
+                actionUrl: rtrim(env('FRONTEND_URL', 'http://localhost'), '/') . '/',
+                data: ['status' => $data['status']],
+            ));
+        }
+
         return new UserResource($user->fresh()->load('companyDetails', 'teamMembers'));
     }
 

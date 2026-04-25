@@ -30,6 +30,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
         ]);
+
+        // Security headers on every response (web + api)
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
+        // Trust DO App Platform's reverse proxy so $request->isSecure() and
+        // $request->ip() reflect the real client behind X-Forwarded-* headers.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // JSON 401 on /api/* instead of redirect to login route

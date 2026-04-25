@@ -4,7 +4,7 @@
 # - "prod" target: nginx + php-fpm baked image for DO App Platform
 
 ############# base #############
-FROM php:8.3-cli-alpine AS base
+FROM php:8.4-cli-alpine AS base
 WORKDIR /var/www/html
 
 RUN apk add --no-cache \

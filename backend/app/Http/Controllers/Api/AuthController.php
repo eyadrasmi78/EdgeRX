@@ -108,8 +108,17 @@ class AuthController extends Controller
             ]);
         }
 
-        // Notify admins (Phase 4)
-        // event(new \App\Events\UserRegistered($user));
+        // Fan-out: ping every admin so they see the new pending registration
+        $admins = User::where('role', 'ADMIN')->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new \App\Notifications\EdgeRxNotification(
+                kind: 'registration_pending',
+                title: 'New registration pending approval',
+                message: "{$user->name} ({$user->role}) just registered and is awaiting approval.",
+                actionUrl: rtrim(env('FRONTEND_URL', 'http://localhost'), '/') . '/',
+                data: ['userId' => $user->id, 'role' => $user->role],
+            ));
+        }
 
         return response()->json([
             'success' => true,

@@ -62,6 +62,18 @@ class PartnershipsController extends Controller
             'product_name' => $data['productName'] ?? null,
             'request_type' => !empty($data['productId']) ? 'PRODUCT_INTEREST' : 'GENERAL_CONNECTION',
         ]);
+
+        // Notify the foreign supplier
+        $foreign = \App\Models\User::find($data['foreignSupplierId']);
+        $foreign?->notify(new \App\Notifications\EdgeRxNotification(
+            kind: 'partnership_requested',
+            title: 'New partnership request',
+            message: "{$user->name} wants to partner with you" .
+                (!empty($data['productName']) ? " — interested in {$data['productName']}." : '.'),
+            actionUrl: rtrim(env('FRONTEND_URL', 'http://localhost'), '/') . '/',
+            data: ['requestId' => $req->id, 'fromAgentId' => $user->id],
+        ));
+
         return response()->json(['success' => true, 'request' => new PartnershipRequestResource($req)], 201);
     }
 
@@ -74,6 +86,21 @@ class PartnershipsController extends Controller
         }
         $data = $request->validate(['status' => 'required|in:ACCEPTED,REJECTED,PENDING']);
         $req->update(['status' => $data['status']]);
+
+        if (in_array($data['status'], ['ACCEPTED', 'REJECTED'], true)) {
+            $agent = \App\Models\User::find($req->from_agent_id);
+            $kind = $data['status'] === 'ACCEPTED' ? 'partnership_accepted' : 'partnership_rejected';
+            $agent?->notify(new \App\Notifications\EdgeRxNotification(
+                kind: $kind,
+                title: $data['status'] === 'ACCEPTED' ? 'Partnership request accepted' : 'Partnership request declined',
+                message: $data['status'] === 'ACCEPTED'
+                    ? "Your partnership request was accepted. You can now collaborate on EdgeRX."
+                    : "Your partnership request was declined.",
+                actionUrl: rtrim(env('FRONTEND_URL', 'http://localhost'), '/') . '/',
+                data: ['requestId' => $req->id, 'status' => $data['status']],
+            ));
+        }
+
         return new PartnershipRequestResource($req->fresh());
     }
 }
