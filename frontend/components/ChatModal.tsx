@@ -18,15 +18,14 @@ export const ChatModal: React.FC<ChatModalProps> = ({ order, currentUser, onClos
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Initial load
-    setMessages(DataService.getMessages(order.id));
-    
-    // Simple polling mock
-    const interval = setInterval(() => {
-        setMessages(DataService.getMessages(order.id));
-    }, 2000);
-    
-    return () => clearInterval(interval);
+    let cancelled = false;
+    const poll = async () => {
+      const msgs = await DataService.refreshChat(order.id);
+      if (!cancelled) setMessages(msgs);
+    };
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [order.id]);
 
   useEffect(() => {
@@ -35,7 +34,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ order, currentUser, onClos
     }
   }, [messages]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
@@ -46,10 +45,18 @@ export const ChatModal: React.FC<ChatModalProps> = ({ order, currentUser, onClos
         text: inputText,
         timestamp: new Date().toISOString()
     };
-
-    DataService.sendMessage(order.id, newMessage);
-    setMessages(prev => [...prev, newMessage]);
+    const text = inputText;
     setInputText('');
+    // Optimistic add
+    setMessages(prev => [...prev, newMessage]);
+    try {
+      await DataService.sendMessage(order.id, { ...newMessage, text });
+      const fresh = await DataService.refreshChat(order.id);
+      setMessages(fresh);
+    } catch {
+      // roll back on failure
+      setMessages(prev => prev.filter(m => m.id !== newMessage.id));
+    }
   };
 
   const isCustomer = currentUser.id === order.customerId;

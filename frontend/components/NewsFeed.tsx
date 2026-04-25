@@ -46,32 +46,32 @@ export const NewsFeed: React.FC<NewsFeedProps> = ({ currentUser }) => {
     }
   }, [currentUser]);
 
-  const handlePostRequest = (e: React.FormEvent) => {
+  const handlePostRequest = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!requestText.trim()) return;
-      
+
       setIsPosting(true);
-      // Simulate API call
-      setTimeout(() => {
-          DataService.createCustomerRequest(currentUser, requestText);
+      try {
+          await DataService.createCustomerRequest(currentUser, requestText);
           setFeedItems(DataService.getFeedItems());
           setRequestText('');
+      } finally {
           setIsPosting(false);
-      }, 500);
+      }
   };
 
-  const handleCreateAd = () => {
+  const handleCreateAd = async () => {
       if (adSelectedProduct) {
-          DataService.createAdvertisement(currentUser, adSelectedProduct, adDuration);
+          await DataService.createAdvertisement(currentUser, adSelectedProduct, adDuration);
           setFeedItems(DataService.getFeedItems());
           setIsAdModalOpen(false);
           setAdSelectedProduct(null);
       }
   };
 
-  const handleCreateNews = (e: React.FormEvent) => {
+  const handleCreateNews = async (e: React.FormEvent) => {
       e.preventDefault();
-      DataService.createAdminNews(currentUser, newsForm.title, newsForm.content, newsForm.mediaType, newsForm.mediaUrl, newsForm.externalLink, newsForm.attachmentName);
+      await DataService.createAdminNews(currentUser, newsForm.title, newsForm.content, newsForm.mediaType, newsForm.mediaUrl, newsForm.externalLink, newsForm.attachmentName);
       setFeedItems(DataService.getFeedItems());
       setIsNewsModalOpen(false);
       setNewsForm({ title: '', content: '', mediaUrl: '', externalLink: '', mediaType: 'image', attachmentName: '' });

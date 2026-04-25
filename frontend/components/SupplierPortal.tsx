@@ -190,8 +190,8 @@ export const SupplierPortal: React.FC<SupplierPortalProps> = ({
       setEditedQuantities(newEdits);
   };
 
-  const handleConnect = (supplierId: string) => {
-      const result = DataService.sendPartnershipRequest(currentUser, supplierId);
+  const handleConnect = async (supplierId: string) => {
+      const result = await DataService.sendPartnershipRequest(currentUser, supplierId);
       if (result.success) {
           setSentRequestsStatus(prev => ({...prev, [supplierId]: 'PENDING'}));
       } else {
@@ -199,16 +199,16 @@ export const SupplierPortal: React.FC<SupplierPortalProps> = ({
       }
   };
 
-  const handleProductInterest = (product: Product) => {
+  const handleProductInterest = async (product: Product) => {
       if (!viewingSupplierId) return;
-      const result = DataService.sendPartnershipRequest(currentUser, viewingSupplierId, { id: product.id, name: product.name });
+      const result = await DataService.sendPartnershipRequest(currentUser, viewingSupplierId, { id: product.id, name: product.name });
       if (!result.success && result.message !== 'Request sent successfully.') {
-          // alert(result.message); 
+          // alert(result.message);
       }
   };
 
-  const handleRequestResponse = (requestId: string, status: 'ACCEPTED' | 'REJECTED') => {
-      DataService.updatePartnershipRequest(requestId, status);
+  const handleRequestResponse = async (requestId: string, status: 'ACCEPTED' | 'REJECTED') => {
+      await DataService.updatePartnershipRequest(requestId, status);
       // Update local state to reflect change immediately
       setPartnershipRequests(prev => prev.map(req => req.id === requestId ? { ...req, status } : req));
   };
@@ -367,7 +367,7 @@ export const SupplierPortal: React.FC<SupplierPortalProps> = ({
       setUserModal({ isOpen: true, mode: 'edit', editingId: member.id });
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (userModal.mode === 'create') {
         const newMember: TeamMember = {
@@ -380,7 +380,7 @@ export const SupplierPortal: React.FC<SupplierPortalProps> = ({
             permissions: userFormData.permissions,
             createdAt: new Date().toISOString()
         };
-        const result = DataService.addTeamMember(currentUser.id, newMember);
+        const result = await DataService.addTeamMember(currentUser.id, newMember);
         if (result.success) {
             setLocalTeamMembers(prev => [...prev, newMember]);
             setUserModal({ isOpen: false, mode: 'create' });
@@ -393,16 +393,16 @@ export const SupplierPortal: React.FC<SupplierPortalProps> = ({
         }
         const memberIdx = localTeamMembers.findIndex(m => m.id === userModal.editingId);
         if (memberIdx > -1) {
-            const updated = { 
-                ...localTeamMembers[memberIdx], 
-                name: userFormData.name, 
-                email: userFormData.email, 
-                phone: userFormData.phone, 
+            const updated = {
+                ...localTeamMembers[memberIdx],
+                name: userFormData.name,
+                email: userFormData.email,
+                phone: userFormData.phone,
                 jobTitle: userFormData.jobTitle,
-                password: userFormData.password, 
-                permissions: userFormData.permissions 
+                password: userFormData.password,
+                permissions: userFormData.permissions
             };
-            DataService.updateTeamMember(currentUser.id, updated);
+            await DataService.updateTeamMember(currentUser.id, updated);
             const newList = [...localTeamMembers];
             newList[memberIdx] = updated;
             setLocalTeamMembers(newList);

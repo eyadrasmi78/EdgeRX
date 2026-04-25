@@ -41,9 +41,9 @@ export const Register: React.FC<RegisterProps> = ({ onNavigateToLogin }) => {
 
   const inputClasses = "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2.5 px-3 bg-slate-50 focus:bg-white focus:ring-sky-500 focus:border-sky-500 sm:text-sm transition-colors";
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.tradeLicenseFile) {
         setMessage("Please attach Trade License document.");
@@ -81,10 +81,15 @@ export const Register: React.FC<RegisterProps> = ({ onNavigateToLogin }) => {
       }
     };
 
-    const result = DataService.registerUser(newUser);
-    setMessage(result.message);
-    setIsSuccess(result.success);
-    if (result.success) setTimeout(() => onNavigateToLogin(), 4000);
+    try {
+      const result = await DataService.registerUser(newUser);
+      setMessage(result.message || (result.success ? 'Registration successful.' : 'Registration failed.'));
+      setIsSuccess(result.success);
+      if (result.success) setTimeout(() => onNavigateToLogin(), 4000);
+    } catch (err: any) {
+      setMessage(err?.message || 'Registration failed.');
+      setIsSuccess(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

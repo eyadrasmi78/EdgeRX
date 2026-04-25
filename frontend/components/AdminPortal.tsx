@@ -127,7 +127,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders 
     }
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const newId = Math.random().toString(36).substr(2, 9);
     let companyDetails = { address: createFormData.address, website: createFormData.website } as any;
@@ -166,10 +166,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders 
       teamMembers: []
     };
 
-    const result = DataService.registerUser(newUser);
+    const result = await DataService.registerUser(newUser);
     if (result.success) {
-      DataService.updateUserStatus(newId, RegistrationStatus.APPROVED);
-      refreshData();
+      // We don't have the new user's id from the API; refresh and approve any PENDING entry with that email.
+      await refreshData();
+      const created = DataService.getUsers().find(u => u.email === newUser.email);
+      if (created) {
+        await DataService.updateUserStatus(created.id, RegistrationStatus.APPROVED);
+        await refreshData();
+      }
       setIsCreateModalOpen(false);
       setCreateFormData({
         name: '', email: '', password: 'password123', role: UserRole.CUSTOMER, address: '', website: '',
@@ -198,7 +203,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders 
       setUserModal({ isOpen: true, mode: 'create' });
   };
 
-  const handleSaveCompanyUser = (e: React.FormEvent) => {
+  const handleSaveCompanyUser = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!viewingCompanyUsers) return;
 
@@ -212,7 +217,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders 
               permissions: userFormData.permissions,
               createdAt: new Date().toISOString()
           };
-          const result = DataService.addTeamMember(viewingCompanyUsers.id, newMember);
+          const result = await DataService.addTeamMember(viewingCompanyUsers.id, newMember);
           if (result.success) {
               refreshData();
               setUserModal({ isOpen: false, mode: 'create' });
@@ -228,7 +233,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders 
                   phone: userFormData.phone,
                   password: userFormData.password
               };
-              DataService.updateUser(updatedUser);
+              await DataService.updateUser(updatedUser);
               refreshData(updatedUser);
           } else {
               const member = viewingCompanyUsers.teamMembers?.find(m => m.id === userModal.editingId);
@@ -241,7 +246,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders 
                       password: userFormData.password,
                       permissions: userFormData.permissions
                   };
-                  DataService.updateTeamMember(viewingCompanyUsers.id, updatedMember);
+                  await DataService.updateTeamMember(viewingCompanyUsers.id, updatedMember);
                   refreshData();
               }
           }

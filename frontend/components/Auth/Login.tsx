@@ -16,14 +16,24 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegist
   const [error, setError] = useState('');
   const { t, toggleLanguage, language, dir } = useLanguage();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError('');
-    const result = DataService.loginUser(email, password);
-    if (result.success && result.user) {
-      onLoginSuccess(result.user);
-    } else {
-      setError(result.message || 'Login failed');
+    setIsSubmitting(true);
+    try {
+      const result = await DataService.loginUser(email, password);
+      if (result.success && result.user) {
+        onLoginSuccess(result.user);
+      } else {
+        setError(result.message || 'Login failed');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Login failed');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

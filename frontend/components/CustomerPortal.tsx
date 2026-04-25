@@ -167,7 +167,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({ products, onRequ
       setUserModal({ isOpen: true, mode: 'edit', editingId: member.id });
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
       e.preventDefault();
       if (userModal.mode === 'create') {
           const newMember: TeamMember = {
@@ -179,7 +179,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({ products, onRequ
               permissions: userFormData.permissions,
               createdAt: new Date().toISOString()
           };
-          const result = DataService.addTeamMember(currentUser.id, newMember);
+          const result = await DataService.addTeamMember(currentUser.id, newMember);
           if (result.success) {
               setLocalTeamMembers(prev => [...prev, newMember]);
               setUserModal({ isOpen: false, mode: 'create' });
@@ -193,7 +193,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({ products, onRequ
           const memberIndex = localTeamMembers.findIndex(m => m.id === userModal.editingId);
           if (memberIndex > -1) {
               const updatedMember = { ...localTeamMembers[memberIndex], name: userFormData.name, email: userFormData.email, phone: userFormData.phone, password: userFormData.password, permissions: userFormData.permissions };
-              DataService.updateTeamMember(currentUser.id, updatedMember);
+              await DataService.updateTeamMember(currentUser.id, updatedMember);
               const newMembers = [...localTeamMembers];
               newMembers[memberIndex] = updatedMember;
               setLocalTeamMembers(newMembers);

@@ -17,21 +17,32 @@ import { LogOut, ShoppingCart, User as UserIcon, Bell, Home, Globe, LayoutGrid, 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isBooting, setIsBooting] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  
+
   // Navigation State
   const [activeView, setActiveView] = useState<string>('home');
-  
+
   const { t, toggleLanguage, language, dir } = useLanguage();
 
   useEffect(() => {
-    // Initial Data Load
-    setProducts(DataService.getProducts());
-    setOrders(DataService.getOrders());
+    // Bootstrap: detect existing Sanctum session, hydrate caches.
+    (async () => {
+      try {
+        const session = await DataService.bootstrap();
+        if (session.user) {
+          setUser(session.user);
+        }
+        setProducts(DataService.getProducts());
+        setOrders(DataService.getOrders());
+      } finally {
+        setIsBooting(false);
+      }
+    })();
   }, []);
 
   const addNotification = (message: string, type: 'success' | 'info' | 'warning' = 'info') => {
@@ -45,13 +56,18 @@ export function App() {
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
-    setActiveView('home'); 
+    setActiveView('home');
+    setProducts(DataService.getProducts());
+    setOrders(DataService.getOrders());
     addNotification(`${t('welcome')} ${loggedInUser.name}`, 'success');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await DataService.logout();
     setUser(null);
     setCart([]);
+    setProducts([]);
+    setOrders([]);
     setIsCartOpen(false);
     setActiveView('home');
   };
@@ -80,59 +96,83 @@ export function App() {
     setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity } : item));
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (!user) return;
-    
-    const newOrders = cart.map((item, index) => ({
-      id: `ord-${Date.now()}-${index}`,
-      orderNumber: `ORD-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`,
-      productId: item.product.id,
-      productName: item.product.name,
-      customerId: user.id,
-      customerName: user.name,
-      supplierName: item.product.supplierName,
-      quantity: item.quantity,
-      unitOfMeasurement: item.product.unitOfMeasurement,
-      status: OrderStatus.RECEIVED,
-      date: new Date().toISOString(),
-      statusHistory: [{ status: OrderStatus.RECEIVED, timestamp: new Date().toISOString() }]
-    }));
 
-    newOrders.forEach(order => DataService.createOrder(order));
-    setOrders(DataService.getOrders());
-    setCart([]);
-    addNotification('Orders placed successfully!', 'success');
-    setActiveView(user.role === UserRole.CUSTOMER ? 'my_requests' : 'orders');
+    try {
+      // Each cart line becomes one order via POST /api/orders.
+      for (const item of cart) {
+        const order: Order = {
+          id: '', orderNumber: '',
+          productId: item.product.id,
+          productName: item.product.name,
+          customerId: user.id,
+          customerName: user.name,
+          supplierName: item.product.supplierName,
+          quantity: item.quantity,
+          unitOfMeasurement: item.product.unitOfMeasurement,
+          status: OrderStatus.RECEIVED,
+          date: new Date().toISOString(),
+        };
+        await DataService.createOrder(order);
+      }
+      setOrders(DataService.getOrders());
+      setCart([]);
+      addNotification('Orders placed successfully!', 'success');
+      setActiveView(user.role === UserRole.CUSTOMER ? 'my_requests' : 'orders');
+    } catch {
+      addNotification('Failed to place orders. Please try again.', 'warning');
+    }
   };
 
-  const handleUpdateOrderStatus = (orderId: string, status: OrderStatus, note?: string) => {
-    DataService.updateOrderStatus(orderId, status, note);
-    setOrders(DataService.getOrders());
-    addNotification(`Order status updated to ${status}`, 'success');
+  const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus, note?: string) => {
+    try {
+      await DataService.updateOrderStatus(orderId, status, note);
+      setOrders(DataService.getOrders());
+      addNotification(`Order status updated to ${status}`, 'success');
+    } catch {
+      addNotification('Could not update order status.', 'warning');
+    }
   };
 
-  const handleUpdateOrder = (orderId: string, updates: Partial<Order>, note?: string) => {
-      DataService.updateOrder(orderId, updates, note);
+  const handleUpdateOrder = async (orderId: string, updates: Partial<Order>, note?: string) => {
+    try {
+      await DataService.updateOrder(orderId, updates, note);
       setOrders(DataService.getOrders());
       addNotification('Order updated', 'success');
+    } catch {
+      addNotification('Could not update order.', 'warning');
+    }
   };
 
-  const handleUpdateProduct = (updatedProduct: Product) => {
-    DataService.updateProduct(updatedProduct);
-    setProducts(DataService.getProducts());
-    addNotification('Product updated successfully', 'success');
+  const handleUpdateProduct = async (updatedProduct: Product) => {
+    try {
+      await DataService.updateProduct(updatedProduct);
+      setProducts(DataService.getProducts());
+      addNotification('Product updated successfully', 'success');
+    } catch {
+      addNotification('Could not update product.', 'warning');
+    }
   };
 
-  const handleBulkAddProducts = (newProducts: Product[]) => {
-    newProducts.forEach(p => DataService.addProduct(p));
-    setProducts(DataService.getProducts());
-    addNotification(`${newProducts.length} products added successfully`, 'success');
+  const handleBulkAddProducts = async (newProducts: Product[]) => {
+    try {
+      for (const p of newProducts) await DataService.addProduct(p);
+      setProducts(DataService.getProducts());
+      addNotification(`${newProducts.length} products added successfully`, 'success');
+    } catch {
+      addNotification('Some products failed to add.', 'warning');
+    }
   };
 
-  const handleUpdateProfile = (updatedUser: User) => {
-      DataService.updateUser(updatedUser);
+  const handleUpdateProfile = async (updatedUser: User) => {
+    try {
+      await DataService.updateUser(updatedUser);
       setUser(updatedUser);
       addNotification('Profile updated', 'success');
+    } catch {
+      addNotification('Could not update profile.', 'warning');
+    }
   };
 
   const getNavItems = () => {
@@ -312,6 +352,19 @@ export function App() {
 
     return <div>View not found</div>;
   };
+
+  if (isBooting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50" dir={dir}>
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <div className="bg-teal-600 p-3 rounded-lg animate-pulse">
+            <Activity className="h-6 w-6 text-white" />
+          </div>
+          <p className="text-sm font-medium">Loading EdgeRx…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isRegistering) {
     return <Register onNavigateToLogin={() => setIsRegistering(false)} />;
