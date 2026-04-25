@@ -12,7 +12,7 @@ services:
     source_dir: backend
     build_command: ""
     github:
-      repo: eyadrasmi78/EdgeRX2.0
+      repo: EyadRasmiMahmoud/EdgeRX2.0
       branch: main
       deploy_on_push: true
     routes:
@@ -86,7 +86,7 @@ static_sites:
   - name: frontend
     source_dir: frontend
     github:
-      repo: eyadrasmi78/EdgeRX2.0
+      repo: EyadRasmiMahmoud/EdgeRX2.0
       branch: main
       deploy_on_push: true
     output_dir: dist
@@ -103,7 +103,7 @@ workers:
     dockerfile_path: backend/Dockerfile
     source_dir: backend
     github:
-      repo: eyadrasmi78/EdgeRX2.0
+      repo: EyadRasmiMahmoud/EdgeRX2.0
       branch: main
       deploy_on_push: true
     run_command: php artisan queue:work --tries=3 --max-time=3600 --sleep=2
