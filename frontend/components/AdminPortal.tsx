@@ -14,7 +14,69 @@ interface AdminPortalProps {
 export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders = [], onUpdateProduct }) => {
   const { t } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
-  const [activeTab, setActiveTab] = useState<'users' | 'products'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'products' | 'pharmacy_groups'>('users');
+
+  /* ── Pharmacy Master groups (Phase A) ── */
+  const [groups, setGroups] = useState<User[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [groupForm, setGroupForm] = useState({ name: '', email: '', password: 'password', phone: '', pharmacyIds: [] as string[] });
+  const [groupError, setGroupError] = useState<string | null>(null);
+
+  const loadGroups = async () => {
+    setGroupsLoading(true);
+    try {
+      const list = await DataService.listPharmacyGroups();
+      setGroups(list);
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+  useEffect(() => {
+    if (activeTab === 'pharmacy_groups') {
+      loadGroups();
+      refreshData();
+    }
+  }, [activeTab]);
+
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGroupError(null);
+    const r = await DataService.createPharmacyGroup({
+      name: groupForm.name,
+      email: groupForm.email,
+      password: groupForm.password,
+      phone: groupForm.phone || undefined,
+      pharmacyIds: groupForm.pharmacyIds,
+    });
+    if (!r.success) {
+      setGroupError(r.message || 'Could not create');
+      return;
+    }
+    setCreateGroupOpen(false);
+    setGroupForm({ name: '', email: '', password: 'password', phone: '', pharmacyIds: [] });
+    await loadGroups();
+  };
+
+  const handleLinkPharmacy = async (masterId: string, pharmacyId: string) => {
+    const r = await DataService.linkPharmacyToGroup(masterId, pharmacyId);
+    if (!r.success) alert(r.message);
+    await loadGroups();
+  };
+
+  const handleUnlinkPharmacy = async (masterId: string, pharmacyId: string) => {
+    if (!confirm('Unlink this pharmacy from the group?')) return;
+    const r = await DataService.unlinkPharmacyFromGroup(masterId, pharmacyId);
+    if (!r.success) alert(r.message);
+    await loadGroups();
+  };
+
+  const handleDeleteGroup = async (masterId: string) => {
+    if (!confirm('Delete this Pharmacy Master account? Children stay (just unlinked).')) return;
+    const r = await DataService.deletePharmacyGroup(masterId);
+    if (!r.success) alert(r.message);
+    await loadGroups();
+  };
   
   // User Management State
   const [searchTerm, setSearchTerm] = useState('');
@@ -362,7 +424,174 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ products = [], orders 
          <button onClick={() => setActiveTab('products')} className={`pb-4 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'products' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             <LayoutGrid size={18} /> {t('product_registry')}
          </button>
+         <button onClick={() => setActiveTab('pharmacy_groups')} className={`pb-4 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'pharmacy_groups' ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <Building size={18} /> {t('manage_pharmacy_groups')}
+         </button>
       </div>
+
+      {activeTab === 'pharmacy_groups' && (
+        <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-black text-gray-900">{t('manage_pharmacy_groups')}</h2>
+              <p className="text-xs text-gray-500 font-medium mt-1">
+                {t('pharmacy_groups_desc')}
+              </p>
+            </div>
+            <button
+              onClick={() => setCreateGroupOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-200/50 transition-all"
+            >
+              <Users size={16} /> {t('create_pharmacy_master')}
+            </button>
+          </div>
+
+          {groupsLoading && <p className="text-sm text-gray-500">Loading...</p>}
+
+          {!groupsLoading && groups.length === 0 && (
+            <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
+              <Building className="mx-auto text-gray-300 mb-4" size={48} />
+              <p className="text-sm text-gray-500">{t('no_pharmacy_groups_yet')}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {groups.map((g) => {
+              const linkedIds = (g.childPharmacies ?? []).map(p => p.id);
+              const availablePharmacies = users.filter(u =>
+                u.role === UserRole.CUSTOMER && u.status === RegistrationStatus.APPROVED && !linkedIds.includes(u.id)
+              );
+              return (
+                <div key={g.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-5 flex items-start justify-between border-b border-gray-100">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-teal-100 rounded-xl p-2"><Building className="text-teal-700" size={20} /></div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{g.name}</h3>
+                        <p className="text-xs text-gray-500 font-mono">{g.email}</p>
+                        <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-bold">
+                          {(g.childPharmacies?.length ?? 0)} {t('linked_pharmacies')}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteGroup(g.id)}
+                      className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                    >Delete master</button>
+                  </div>
+                  <div className="p-4 bg-gray-50 space-y-2">
+                    {(g.childPharmacies ?? []).length === 0 && (
+                      <p className="text-xs text-gray-500 italic px-2">No pharmacies linked yet.</p>
+                    )}
+                    {(g.childPharmacies ?? []).map(p => (
+                      <div key={p.id} className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                          <p className="text-[10px] text-gray-500 font-mono">{p.email}</p>
+                        </div>
+                        <button
+                          onClick={() => handleUnlinkPharmacy(g.id, p.id)}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >{t('unlink')}</button>
+                      </div>
+                    ))}
+                    {availablePharmacies.length > 0 && (
+                      <div className="pt-2 flex gap-2">
+                        <select
+                          className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"
+                          defaultValue=""
+                          onChange={e => {
+                            const pid = e.target.value;
+                            if (pid) { handleLinkPharmacy(g.id, pid); e.target.value = ''; }
+                          }}
+                        >
+                          <option value="">{t('link_existing_pharmacy')}</option>
+                          {availablePharmacies.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.email})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {createGroupOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <form onSubmit={handleCreateGroup} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="text-base font-bold text-gray-900">{t('create_pharmacy_master')}</h3>
+                  <button type="button" onClick={() => { setCreateGroupOpen(false); setGroupError(null); }} className="text-gray-400 hover:text-gray-600">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-5 space-y-3">
+                  <input
+                    type="text" required placeholder="Group name (e.g. Gulf Pharmacy Group)"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={groupForm.name} onChange={e => setGroupForm({ ...groupForm, name: e.target.value })}
+                  />
+                  <input
+                    type="email" required placeholder="Login email"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={groupForm.email} onChange={e => setGroupForm({ ...groupForm, email: e.target.value })}
+                  />
+                  <input
+                    type="text" required placeholder="Password"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={groupForm.password} onChange={e => setGroupForm({ ...groupForm, password: e.target.value })}
+                  />
+                  <input
+                    type="text" placeholder="Phone (optional)"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={groupForm.phone} onChange={e => setGroupForm({ ...groupForm, phone: e.target.value })}
+                  />
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{t('select_pharmacies')}</label>
+                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1 bg-gray-50">
+                      {users.filter(u => u.role === UserRole.CUSTOMER && u.status === RegistrationStatus.APPROVED).map(u => {
+                        const linkedElsewhere = groups.some(g => (g.childPharmacies ?? []).some(p => p.id === u.id));
+                        const checked = groupForm.pharmacyIds.includes(u.id);
+                        return (
+                          <label key={u.id} className={`flex items-center gap-2 text-sm px-2 py-1 rounded ${linkedElsewhere ? 'opacity-40' : 'hover:bg-white'}`}>
+                            <input
+                              type="checkbox" checked={checked} disabled={linkedElsewhere}
+                              onChange={(e) => {
+                                setGroupForm(prev => ({
+                                  ...prev,
+                                  pharmacyIds: e.target.checked
+                                    ? [...prev.pharmacyIds, u.id]
+                                    : prev.pharmacyIds.filter(x => x !== u.id),
+                                }));
+                              }}
+                            />
+                            <span className="font-medium text-gray-800 truncate">{u.name}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">{u.email}</span>
+                            {linkedElsewhere && <span className="text-[9px] text-red-500 ml-auto">already linked</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {groupError && <p className="text-xs text-red-600">{groupError}</p>}
+                </div>
+                <div className="p-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
+                  <button type="button" onClick={() => { setCreateGroupOpen(false); setGroupError(null); }}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    {t('cancel')}
+                  </button>
+                  <button type="submit"
+                    className="px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg">
+                    {t('create')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
 
       {activeTab === 'users' && (
         <div className="animate-in fade-in slide-in-from-left-4 duration-300">

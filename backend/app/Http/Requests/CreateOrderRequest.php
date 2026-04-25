@@ -22,6 +22,9 @@ class CreateOrderRequest extends FormRequest
             'quantity' => 'required|integer|min:1|max:100000',
             // Server recomputes bonus from the product — this is informational only.
             'bonusQuantity' => 'nullable|integer|min:0|max:100000',
+            // When the requester is a Pharmacy Master, they MAY specify a child pharmacy
+            // to place the order on behalf of. Controller validates ownership.
+            'onBehalfOfCustomerId' => 'nullable|string|exists:users,id',
         ];
     }
 }

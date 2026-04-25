@@ -8,7 +8,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 interface CustomerPortalProps {
   products: Product[];
-  onRequestOrder: (product: Product, quantity: number) => void;
+  /** 3rd arg `customerId` is set when a Pharmacy Master adds on behalf of a child. */
+  onRequestOrder: (product: Product, quantity: number, customerId?: string) => void;
   currentUser: User;
   orders: Order[];
   onUpdateProfile?: (user: User) => void;
@@ -358,7 +359,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({ products, onRequ
           </div>
       )}
 
-      {selectedProduct && <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onRequestOrder={onRequestOrder} />}
+      {selectedProduct && <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onRequestOrder={onRequestOrder} currentUser={currentUser} />}
       
       {userModal.isOpen && (
            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

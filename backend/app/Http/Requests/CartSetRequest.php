@@ -20,6 +20,9 @@ class CartSetRequest extends FormRequest
             'items' => 'required|array|max:200',
             'items.*.productId' => 'required|string|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1|max:100000',
+            // Optional — only meaningful when requester is a Pharmacy Master.
+            // Controller validates ownership.
+            'items.*.onBehalfOfCustomerId' => 'nullable|string|exists:users,id',
         ];
     }
 }

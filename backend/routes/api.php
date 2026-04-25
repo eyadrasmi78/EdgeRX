@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\OrdersController;
 use App\Http\Controllers\Api\PartnershipsController;
+use App\Http\Controllers\Api\PharmacyGroupsController;
 use App\Http\Controllers\Api\ProductsController;
 use App\Http\Controllers\Api\UsersController;
 use Illuminate\Support\Facades\Route;
@@ -72,6 +73,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/partnerships',           [PartnershipsController::class, 'index']);
     Route::post('/partnerships',          [PartnershipsController::class, 'store']);
     Route::patch('/partnerships/{id}',    [PartnershipsController::class, 'update']);
+
+    // Pharmacy Master groups (Phase A — Feature 1)
+    // /me/pharmacies returns the current master's children (or [] for non-masters)
+    Route::get('/me/pharmacies', function (\Illuminate\Http\Request $r) {
+        $u = $r->user();
+        if (!$u->isPharmacyMaster()) return response()->json([]);
+        return \App\Http\Resources\UserResource::collection($u->masterOf()->get());
+    });
+    // Admin CRUD
+    Route::middleware('role:ADMIN')->group(function () {
+        Route::get('/admin/pharmacy-groups',                                  [PharmacyGroupsController::class, 'index']);
+        Route::post('/admin/pharmacy-groups',                                 [PharmacyGroupsController::class, 'store']);
+        Route::get('/admin/pharmacy-groups/{id}',                             [PharmacyGroupsController::class, 'show']);
+        Route::patch('/admin/pharmacy-groups/{id}',                           [PharmacyGroupsController::class, 'update']);
+        Route::post('/admin/pharmacy-groups/{id}/pharmacies',                 [PharmacyGroupsController::class, 'attach']);
+        Route::delete('/admin/pharmacy-groups/{id}/pharmacies/{pharmacyId}',  [PharmacyGroupsController::class, 'detach']);
+        Route::delete('/admin/pharmacy-groups/{id}',                          [PharmacyGroupsController::class, 'destroy']);
+    });
 
     // Notifications
     Route::get('/notifications',                  [NotificationsController::class, 'index']);

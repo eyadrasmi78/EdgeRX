@@ -3,7 +3,18 @@ export enum UserRole {
   CUSTOMER = 'CUSTOMER', // Hospital, Pharmacy
   SUPPLIER = 'SUPPLIER', // Local Agent, Vendor
   FOREIGN_SUPPLIER = 'FOREIGN_SUPPLIER', // International Manufacturer/Marketer
-  ADMIN = 'ADMIN' // System Admin
+  ADMIN = 'ADMIN', // System Admin
+  PHARMACY_MASTER = 'PHARMACY_MASTER' // Owner of multiple pharmacy CUSTOMER accounts
+}
+
+/** Lightweight pharmacy reference used by Pharmacy Master flows. */
+export interface ChildPharmacy {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: 'CUSTOMER';
+  status: RegistrationStatus;
 }
 
 export enum RegistrationStatus {
@@ -127,13 +138,17 @@ export interface CompanyDetails {
 export interface User {
   id: string;
   email: string;
-  password: string; 
-  name: string; 
-  phone?: string; 
+  password: string;
+  name: string;
+  phone?: string;
   role: UserRole;
   status: RegistrationStatus;
   companyDetails?: CompanyDetails;
-  teamMembers?: TeamMember[]; 
+  teamMembers?: TeamMember[];
+  /** Populated when role === PHARMACY_MASTER */
+  childPharmacies?: ChildPharmacy[];
+  /** Populated for CUSTOMER users that have a master */
+  master?: { id: string; name: string } | null;
 }
 
 export interface Product {
@@ -185,6 +200,9 @@ export interface Product {
 export interface CartItem {
   product: Product;
   quantity: number;
+  /** Populated when a Pharmacy Master adds the item on behalf of a child pharmacy. */
+  onBehalfOfCustomerId?: string;
+  onBehalfOfCustomerName?: string;
 }
 
 export interface OrderHistoryLog {
@@ -214,6 +232,10 @@ export interface Order {
   returnRequested?: boolean;
   returnReason?: ReturnReason;
   returnNote?: string;
+
+  /** When a Pharmacy Master placed the order on behalf of a child pharmacy. */
+  placedByUserId?: string;
+  placedByUserName?: string;
 }
 
 export interface PartnershipRequest {

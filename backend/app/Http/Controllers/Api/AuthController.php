@@ -30,9 +30,14 @@ class AuthController extends Controller
             }
             $request->session()->regenerate();
             Auth::login($user);
+
+            $relations = ['companyDetails', 'teamMembers'];
+            if ($user->isPharmacyMaster()) $relations[] = 'masterOf';
+            if ($user->isCustomer())       $relations[] = 'masteredBy';
+
             return response()->json([
                 'success' => true,
-                'user' => new UserResource($user->load('companyDetails', 'teamMembers')),
+                'user' => new UserResource($user->load($relations)),
             ]);
         }
 
@@ -114,8 +119,19 @@ class AuthController extends Controller
         if (!$user) {
             return response()->json(['user' => null], 200);
         }
+
+        // Eager-load relations the SPA needs: company details + team members + (for masters)
+        // their child pharmacies + (for customers) their master if any.
+        $relations = ['companyDetails', 'teamMembers'];
+        if ($user->isPharmacyMaster()) {
+            $relations[] = 'masterOf';
+        }
+        if ($user->isCustomer()) {
+            $relations[] = 'masteredBy';
+        }
+
         return response()->json([
-            'user' => new UserResource($user->load('companyDetails', 'teamMembers')),
+            'user' => new UserResource($user->load($relations)),
             'isTeamMember' => $request->session()->has('team_member_id'),
         ]);
     }
