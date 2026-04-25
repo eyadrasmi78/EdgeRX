@@ -33,7 +33,119 @@ class DemoDataSeeder extends Seeder
             $this->seedPharmacyMaster();
             $this->seedOrders();
             $this->seedFeed();
+            $this->seedBuyingGroups();
         });
+    }
+
+    /* ──────────────── BUYING GROUPS (Phase B demo) ──────────────── */
+    private function seedBuyingGroups(): void
+    {
+        // City General Hospital (id=3) is the only seeded customer NOT under a master,
+        // so for the demo we add a couple more independent customers to populate a buying group.
+        $extraCustomers = [
+            ['id' => 'bg_c1', 'name' => 'Al-Salam Pharmacy',         'email' => 'alsalam@pharma.kw'],
+            ['id' => 'bg_c2', 'name' => 'Mishref Medical Center',    'email' => 'mishref@medical.kw'],
+            ['id' => 'bg_c3', 'name' => 'Sabah Hospital Procurement','email' => 'sabah@hospital.kw'],
+        ];
+        foreach ($extraCustomers as $c) {
+            \App\Models\User::updateOrCreate(['id' => $c['id']], [
+                'id' => $c['id'],
+                'name' => $c['name'],
+                'email' => $c['email'],
+                'password' => \Illuminate\Support\Facades\Hash::make('password', ['rounds' => 4]),
+                'phone' => '+965-9000-' . substr($c['id'], -3),
+                'role' => 'CUSTOMER',
+                'status' => 'APPROVED',
+            ]);
+            \App\Models\CompanyDetails::updateOrCreate(
+                ['user_id' => $c['id']],
+                ['user_id' => $c['id'], 'address' => 'Kuwait', 'website' => 'demo.kw'],
+            );
+        }
+
+        // Group 1: COLLECTING — admin invited 4 customers, 2 committed, 1 accepted
+        $g1 = \App\Models\BuyingGroup::updateOrCreate(['id' => 'bg1'], [
+            'id' => 'bg1',
+            'name' => 'Q2 2026 Amoxicillin Bulk Buy',
+            'product_id' => 'p1', // Amoxicillin (50 unit bonus threshold, 5%)
+            'supplier_id' => '2', // MediGlobal
+            'target_quantity' => 50,
+            'window_ends_at' => now()->addDays(7),
+            'status' => 'COLLECTING',
+            'created_by_admin_id' => '1',
+        ]);
+        $g1->members()->delete();
+        \App\Models\BuyingGroupMember::create([
+            'buying_group_id' => 'bg1', 'customer_id' => '3',
+            'committed_quantity' => 20, 'status' => 'ACCEPTED',
+        ]);
+        \App\Models\BuyingGroupMember::create([
+            'buying_group_id' => 'bg1', 'customer_id' => 'bg_c1',
+            'committed_quantity' => 15, 'status' => 'COMMITTED',
+        ]);
+        \App\Models\BuyingGroupMember::create([
+            'buying_group_id' => 'bg1', 'customer_id' => 'bg_c2',
+            'status' => 'INVITED',
+        ]);
+        \App\Models\BuyingGroupMember::create([
+            'buying_group_id' => 'bg1', 'customer_id' => 'bg_c3',
+            'status' => 'INVITED',
+        ]);
+
+        // Group 2: RELEASED — already converted into 3 orders
+        $g2 = \App\Models\BuyingGroup::updateOrCreate(['id' => 'bg2'], [
+            'id' => 'bg2',
+            'name' => 'Vitamin C Bulk — March 2026',
+            'product_id' => 'p6', // Vitamin C (100 unit threshold, 10%)
+            'supplier_id' => '5', // Gulf Health Agents
+            'target_quantity' => 100,
+            'status' => 'RELEASED',
+            'created_by_admin_id' => '1',
+            'released_at' => now()->subDays(5),
+        ]);
+        $g2->members()->delete();
+        // Pre-existing orders for the released group
+        $releasedOrders = [
+            ['id' => 'bg_ord1', 'order_number' => 'ORD-2026-BGV001', 'customer_id' => '3',
+             'customer_name' => 'City General Hospital',
+             'qty' => 50, 'bonus' => 5],
+            ['id' => 'bg_ord2', 'order_number' => 'ORD-2026-BGV002', 'customer_id' => 'bg_c1',
+             'customer_name' => 'Al-Salam Pharmacy',
+             'qty' => 30, 'bonus' => 3],
+            ['id' => 'bg_ord3', 'order_number' => 'ORD-2026-BGV003', 'customer_id' => 'bg_c3',
+             'customer_name' => 'Sabah Hospital Procurement',
+             'qty' => 20, 'bonus' => 2],
+        ];
+        foreach ($releasedOrders as $o) {
+            \App\Models\Order::updateOrCreate(['id' => $o['id']], [
+                'id' => $o['id'],
+                'order_number' => $o['order_number'],
+                'product_id' => 'p6', 'product_name' => 'Vitamin C 1000mg Effervescent',
+                'customer_id' => $o['customer_id'], 'customer_name' => $o['customer_name'],
+                'supplier_id' => '5', 'supplier_name' => 'Gulf Health Agents',
+                'placed_by_user_id' => null,
+                'buying_group_id' => 'bg2',
+                'quantity' => $o['qty'], 'bonus_quantity' => $o['bonus'],
+                'unit_of_measurement' => 'Tube',
+                'status' => 'Completed',
+                'date' => now()->subDays(5),
+            ]);
+            \App\Models\OrderHistoryLog::where('order_id', $o['id'])->delete();
+            \App\Models\OrderHistoryLog::create([
+                'order_id' => $o['id'], 'status' => 'Received',
+                'timestamp' => now()->subDays(5),
+                'note' => 'Released from buying group: Vitamin C Bulk — March 2026',
+            ]);
+            \App\Models\OrderHistoryLog::create([
+                'order_id' => $o['id'], 'status' => 'Completed',
+                'timestamp' => now()->subDays(2),
+            ]);
+            \App\Models\BuyingGroupMember::create([
+                'buying_group_id' => 'bg2', 'customer_id' => $o['customer_id'],
+                'committed_quantity' => $o['qty'], 'apportioned_bonus' => $o['bonus'],
+                'status' => 'ACCEPTED', 'resulting_order_id' => $o['id'],
+            ]);
+        }
     }
 
     /* ──────────────── USERS ──────────────── */

@@ -19,6 +19,8 @@ class OrderResource extends JsonResource
             'supplierName' => $this->supplier_name,
             'placedByUserId' => $this->placed_by_user_id,
             'placedByUserName' => $this->whenLoaded('placedBy', fn () => $this->placedBy?->name, null),
+            'buyingGroupId' => $this->buying_group_id,
+            'buyingGroupName' => $this->whenLoaded('buyingGroup', fn () => $this->buyingGroup?->name, null),
             'quantity' => (int) $this->quantity,
             'bonusQuantity' => $this->bonus_quantity !== null ? (int) $this->bonus_quantity : null,
             'unitOfMeasurement' => $this->unit_of_measurement,

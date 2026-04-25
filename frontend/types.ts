@@ -236,6 +236,69 @@ export interface Order {
   /** When a Pharmacy Master placed the order on behalf of a child pharmacy. */
   placedByUserId?: string;
   placedByUserName?: string;
+
+  /** When the order was released from a virtual buying group (Phase B). */
+  buyingGroupId?: string;
+  buyingGroupName?: string;
+}
+
+/* ───── Buying Groups (Phase B — Feature 2) ───── */
+
+export type BuyingGroupStatus =
+  | 'OPEN'
+  | 'COLLECTING'
+  | 'LOCKED'
+  | 'RELEASED'
+  | 'DISSOLVED';
+
+export type BuyingGroupMemberStatus =
+  | 'INVITED'
+  | 'COMMITTED'
+  | 'ACCEPTED'
+  | 'DECLINED';
+
+export interface BuyingGroupMember {
+  id: number;
+  /** null when the viewer is a non-admin and this row is NOT theirs (privacy) */
+  customerId: string | null;
+  customerName: string | null;
+  committedQuantity: number | null;
+  apportionedBonus: number | null;
+  status: BuyingGroupMemberStatus;
+  resultingOrderId: string | null;
+  isOwn: boolean;
+}
+
+export interface BuyingGroup {
+  id: string;
+  name: string;
+  productId: string;
+  productName?: string;
+  productImage?: string;
+  unitOfMeasurement?: string;
+  productBonusThreshold?: number | null;
+  productBonusType?: 'percentage' | 'fixed' | null;
+  productBonusValue?: number | null;
+  supplierId: string;
+  supplierName?: string;
+  targetQuantity: number;
+  windowEndsAt?: string | null;
+  status: BuyingGroupStatus;
+  createdByAdminId: string;
+  releasedAt?: string | null;
+  dissolvedAt?: string | null;
+  createdAt?: string;
+  /** Aggregate stats — visible to every viewer (admin, member, master, supplier). */
+  aggregate: {
+    memberCount: number;
+    acceptedCount: number;
+    acceptedQuantity: number;
+    committedQuantity: number;
+    thresholdMet: boolean;
+    percentToTarget: number;
+  };
+  /** Members — non-admins see ONLY their own row. */
+  members: BuyingGroupMember[];
 }
 
 export interface PartnershipRequest {

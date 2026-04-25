@@ -146,7 +146,7 @@ class CartController extends Controller
                 ]);
                 ChatRoom::firstOrCreate(['order_id' => $order->id]);
 
-                $orders[] = $order->load('statusHistory');
+                $orders[] = $order->load(['statusHistory', 'placedBy', 'buyingGroup']);
 
                 if ($order->supplier_id) {
                     $supplierNotifications[$order->supplier_id][] = $order;

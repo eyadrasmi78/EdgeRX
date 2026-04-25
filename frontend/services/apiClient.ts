@@ -17,6 +17,7 @@ import {
   User, Product, Order, FeedItem, PartnershipRequest,
   ChatMessage, ChatRoom, OrderStatus, RegistrationStatus,
   Notification as InAppNotification,
+  BuyingGroup,
 } from '../types';
 
 /* ────────────────────────────── caches ────────────────────────────── */
@@ -404,6 +405,58 @@ export const DataService = {
   /** Admin: delete a master (children stay, just unlinked). */
   deletePharmacyGroup: async (masterId: string) => {
     try { await api.del(`/admin/pharmacy-groups/${masterId}`); return { success: true }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+
+  /* ── BUYING GROUPS (Phase B — Feature 2) ────────────── */
+  /** Lists groups visible to the current user (admins all, customers their own, masters/suppliers scoped). */
+  listBuyingGroups: async (): Promise<BuyingGroup[]> => {
+    try { return await api.get<BuyingGroup[]>('/buying-groups'); }
+    catch (e) { logSliceError('buying-groups', e); return []; }
+  },
+  getBuyingGroup: async (id: string): Promise<BuyingGroup | null> => {
+    try { return await api.get<BuyingGroup>(`/buying-groups/${id}`); }
+    catch (e) { logSliceError('buying-group', e); return null; }
+  },
+  /** Member: commit (or revise) a quantity. INVITED → COMMITTED. */
+  commitToBuyingGroup: async (id: string, quantity: number): Promise<{ success: boolean; group?: BuyingGroup; message?: string }> => {
+    try { return { success: true, group: await api.post<BuyingGroup>(`/buying-groups/${id}/commit`, { quantity }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message || 'Could not commit' }; }
+  },
+  /** Member: lock commitment. COMMITTED → ACCEPTED. May trigger auto-release. */
+  acceptBuyingGroup: async (id: string): Promise<{ success: boolean; group?: BuyingGroup; message?: string }> => {
+    try { return { success: true, group: await api.post<BuyingGroup>(`/buying-groups/${id}/accept`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message || 'Could not accept' }; }
+  },
+  /** Member: opt out. */
+  declineBuyingGroup: async (id: string): Promise<{ success: boolean; group?: BuyingGroup; message?: string }> => {
+    try { return { success: true, group: await api.post<BuyingGroup>(`/buying-groups/${id}/decline`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message || 'Could not decline' }; }
+  },
+  adminCreateBuyingGroup: async (payload: {
+    name: string;
+    productId: string;
+    targetQuantity: number;
+    windowEndsAt?: string;
+    memberCustomerIds?: string[];
+  }): Promise<{ success: boolean; group?: BuyingGroup; message?: string }> => {
+    try { return { success: true, group: await api.post<BuyingGroup>('/admin/buying-groups', payload) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message || 'Could not create' }; }
+  },
+  adminAddBuyingGroupMember: async (groupId: string, customerId: string) => {
+    try { return { success: true, group: await api.post<BuyingGroup>(`/admin/buying-groups/${groupId}/members`, { customerId }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message || 'Could not add member' }; }
+  },
+  adminRemoveBuyingGroupMember: async (groupId: string, memberId: number) => {
+    try { return { success: true, group: await api.del<BuyingGroup>(`/admin/buying-groups/${groupId}/members/${memberId}`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  adminReleaseBuyingGroup: async (groupId: string) => {
+    try { return { success: true, ...(await api.post<any>(`/admin/buying-groups/${groupId}/release`)) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  adminDissolveBuyingGroup: async (groupId: string) => {
+    try { return { success: true, group: await api.post<BuyingGroup>(`/admin/buying-groups/${groupId}/dissolve`) }; }
     catch (e: any) { return { success: false, message: e?.data?.message }; }
   },
 };

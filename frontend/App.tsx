@@ -9,6 +9,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { NotificationToast } from './components/NotificationToast';
 import { Dashboard } from './components/Dashboard';
 import { CustomerRequests } from './components/CustomerRequests';
+import { BuyingGroups } from './components/BuyingGroups';
 import { DataService } from './services/mockData';
 import { User, Product, Order, Notification, CartItem, UserRole, OrderStatus, RegistrationStatus } from './types';
 import { useLanguage } from './contexts/LanguageContext';
@@ -293,11 +294,15 @@ export function App() {
     const common = [{ id: 'home', label: t('nav_home'), icon: Home }];
 
     if (user.role === UserRole.CUSTOMER || user.role === UserRole.PHARMACY_MASTER) {
-      return [
+      const items = [
         ...common,
         { id: 'catalog', label: t('nav_catalog'), icon: LayoutGrid },
-        { id: 'my_requests', label: t('nav_requests'), icon: Clock }
+        { id: 'my_requests', label: t('nav_requests'), icon: Clock },
       ];
+      // Buying Groups tab — masters can VIEW (they appear via their child memberships) but can't act
+      // (locked decision #16). Customers can act normally.
+      items.push({ id: 'buying_groups', label: t('nav_buying_groups'), icon: Users });
+      return items;
     }
 
     if (user.role === UserRole.SUPPLIER) {
@@ -343,6 +348,8 @@ export function App() {
                 return <CustomerPortal products={products} onRequestOrder={handleAddToCart} currentUser={user} orders={orders} onUpdateProfile={handleUpdateProfile} />;
             case 'my_requests':
                 return <CustomerRequests orders={orders} currentUser={user} onUpdateOrder={handleUpdateOrder} />;
+            case 'buying_groups':
+                return <BuyingGroups currentUser={user} />;
             default:
                 return <Dashboard currentUser={user} orders={orders} products={products} />;
         }

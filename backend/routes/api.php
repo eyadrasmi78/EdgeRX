@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\OrdersController;
 use App\Http\Controllers\Api\PartnershipsController;
 use App\Http\Controllers\Api\PharmacyGroupsController;
+use App\Http\Controllers\Api\BuyingGroupsController;
 use App\Http\Controllers\Api\ProductsController;
 use App\Http\Controllers\Api\UsersController;
 use Illuminate\Support\Facades\Route;
@@ -90,6 +91,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/pharmacy-groups/{id}/pharmacies',                 [PharmacyGroupsController::class, 'attach']);
         Route::delete('/admin/pharmacy-groups/{id}/pharmacies/{pharmacyId}',  [PharmacyGroupsController::class, 'detach']);
         Route::delete('/admin/pharmacy-groups/{id}',                          [PharmacyGroupsController::class, 'destroy']);
+    });
+
+    // Buying Groups (Phase B — Feature 2)
+    Route::get('/buying-groups',                       [BuyingGroupsController::class, 'index']);
+    Route::get('/buying-groups/{id}',                  [BuyingGroupsController::class, 'show']);
+    Route::post('/buying-groups/{id}/commit',          [BuyingGroupsController::class, 'commit']);
+    Route::post('/buying-groups/{id}/accept',          [BuyingGroupsController::class, 'accept']);
+    Route::post('/buying-groups/{id}/decline',         [BuyingGroupsController::class, 'decline']);
+    Route::middleware('role:ADMIN')->group(function () {
+        Route::post('/admin/buying-groups',                           [BuyingGroupsController::class, 'store']);
+        Route::post('/admin/buying-groups/{id}/members',              [BuyingGroupsController::class, 'addMember']);
+        Route::delete('/admin/buying-groups/{id}/members/{memberId}', [BuyingGroupsController::class, 'removeMember']);
+        Route::post('/admin/buying-groups/{id}/release',              [BuyingGroupsController::class, 'adminRelease']);
+        Route::post('/admin/buying-groups/{id}/dissolve',             [BuyingGroupsController::class, 'adminDissolve']);
     });
 
     // Notifications

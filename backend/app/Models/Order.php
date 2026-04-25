@@ -16,6 +16,7 @@ class Order extends Model
         'customer_id', 'customer_name',
         'supplier_id', 'supplier_name',
         'placed_by_user_id',
+        'buying_group_id',
         'quantity', 'bonus_quantity', 'unit_of_measurement',
         'status', 'decline_reason', 'date',
         'return_requested', 'return_reason', 'return_note',
@@ -53,6 +54,11 @@ class Order extends Model
     public function placedBy()
     {
         return $this->belongsTo(User::class, 'placed_by_user_id');
+    }
+
+    public function buyingGroup()
+    {
+        return $this->belongsTo(BuyingGroup::class, 'buying_group_id');
     }
 
     public function statusHistory()
