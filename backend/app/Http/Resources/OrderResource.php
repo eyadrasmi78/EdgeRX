@@ -35,6 +35,13 @@ class OrderResource extends JsonResource
             'returnRequested' => (bool) $this->return_requested,
             'returnReason' => $this->return_reason,
             'returnNote' => $this->return_note,
+            // Phase D2 — pricing source
+            'pricingSource' => $this->pricing_source,
+            'pricingAgreementId' => $this->pricing_agreement_id,
+            'pricingAgreementVersion' => $this->pricing_agreement_version !== null ? (int) $this->pricing_agreement_version : null,
+            'contractedUnitPrice' => $this->contracted_unit_price !== null ? (float) $this->contracted_unit_price : null,
+            'catalogUnitPrice' => $this->catalog_unit_price !== null ? (float) $this->catalog_unit_price : null,
+            'savingsAmount' => $this->savings_amount !== null ? (float) $this->savings_amount : null,
         ];
     }
 }

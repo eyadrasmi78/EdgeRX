@@ -28,6 +28,13 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('09:00')
             ->withoutOverlapping(15)
             ->onOneServer();
+
+        // Phase D2 — agreement renewal sweep: notify on imminent expiry, flip past-due → EXPIRED.
+        // Runs at 08:00 UTC (11:00 Kuwait time) so renewal pings arrive before the digest.
+        $schedule->command('pricing-agreements:renewal-reminders')
+            ->dailyAt('08:00')
+            ->withoutOverlapping(15)
+            ->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware) {
         // Sanctum SPA: stateful cookie auth on /api/*

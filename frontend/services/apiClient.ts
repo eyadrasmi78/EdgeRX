@@ -18,6 +18,8 @@ import {
   ChatMessage, ChatRoom, OrderStatus, RegistrationStatus,
   Notification as InAppNotification,
   BuyingGroup,
+  TransferRequest, TransferDiscoveryMode,
+  PricingAgreement, PricingQuote,
 } from '../types';
 
 /* ────────────────────────────── caches ────────────────────────────── */
@@ -458,5 +460,119 @@ export const DataService = {
   adminDissolveBuyingGroup: async (groupId: string) => {
     try { return { success: true, group: await api.post<BuyingGroup>(`/admin/buying-groups/${groupId}/dissolve`) }; }
     catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+
+  /* ── TRANSFER REQUESTS (Phase D1) ───────────────────── */
+  listTransfers: async (): Promise<TransferRequest[]> => {
+    try { return await api.get<TransferRequest[]>('/transfers'); }
+    catch (e) { logSliceError('transfers', e); return []; }
+  },
+  getTransfer: async (id: string): Promise<TransferRequest | null> => {
+    try { return await api.get<TransferRequest>(`/transfers/${id}`); }
+    catch (e) { logSliceError('transfer', e); return null; }
+  },
+  createTransfer: async (payload: {
+    discoveryMode: TransferDiscoveryMode;
+    supplierId: string;
+    targetUserId?: string;
+    sourceOrderId?: string;
+    supplierFeeFlat?: number;
+    supplierFeePercent?: number;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      quantity: number;
+      unitPriceRefund: number;
+      unitPriceResale: number;
+      batchNumber: string;
+      lotNumber?: string;
+      expiryDate: string;
+      gs1Barcode?: string;
+      temperatureLogPath?: string;
+      photoPaths?: string[];
+    }>;
+  }): Promise<{ success: boolean; transfer?: TransferRequest; errors?: any; message?: string }> => {
+    try { return { success: true, transfer: await api.post<TransferRequest>('/transfers', payload) }; }
+    catch (e: any) { return { success: false, errors: e?.data?.errors, message: e?.data?.message || 'Could not create' }; }
+  },
+  supplierAcceptTransfer: async (id: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/supplier/accept`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  supplierRejectTransfer: async (id: string, reason: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/supplier/reject`, { reason }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  confirmTransferTarget: async (id: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/target/confirm`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  recordTransferIntake: async (id: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/intake`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  startTransferQc: async (id: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/qc/start`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  passTransferQc: async (id: string, notes?: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/qc/pass`, { notes }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  failTransferQc: async (id: string, reason: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/qc/fail`, { reason }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  confirmTransferPayment: async (id: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/payment/confirm`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  completeTransfer: async (id: string, auditPdfPath?: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/complete`, { auditPdfPath }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  cancelTransfer: async (id: string, reason: string) => {
+    try { return { success: true, transfer: await api.post<TransferRequest>(`/transfers/${id}/cancel`, { reason }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  transferAuditUrl: (id: string) => `/api/transfers/${id}/audit`,
+
+  /* ── PRICING AGREEMENTS (Phase D2) ───────────────────── */
+  listAgreements: async (): Promise<PricingAgreement[]> => {
+    try { return await api.get<PricingAgreement[]>('/pricing-agreements'); }
+    catch (e) { logSliceError('agreements', e); return []; }
+  },
+  getAgreement: async (id: string): Promise<PricingAgreement | null> => {
+    try { return await api.get<PricingAgreement>(`/pricing-agreements/${id}`); }
+    catch (e) { logSliceError('agreement', e); return null; }
+  },
+  createAgreement: async (payload: any) => {
+    try { return { success: true, agreement: await api.post<PricingAgreement>('/pricing-agreements', payload) }; }
+    catch (e: any) { return { success: false, errors: e?.data?.errors, message: e?.data?.message || 'Could not create' }; }
+  },
+  sendAgreementToCustomer: async (id: string) => {
+    try { return { success: true, agreement: await api.post<PricingAgreement>(`/pricing-agreements/${id}/send`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  customerSignAgreement: async (id: string, signedPdfPath: string) => {
+    try { return { success: true, agreement: await api.post<PricingAgreement>(`/pricing-agreements/${id}/sign`, { signedPdfPath }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  adminApproveAgreement: async (id: string) => {
+    try { return { success: true, agreement: await api.post<PricingAgreement>(`/admin/pricing-agreements/${id}/approve`) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  adminRejectAgreement: async (id: string, reason: string) => {
+    try { return { success: true, agreement: await api.post<PricingAgreement>(`/admin/pricing-agreements/${id}/reject`, { reason }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  terminateAgreement: async (id: string, reason: string) => {
+    try { return { success: true, agreement: await api.post<PricingAgreement>(`/pricing-agreements/${id}/terminate`, { reason }) }; }
+    catch (e: any) { return { success: false, message: e?.data?.message }; }
+  },
+  /** Cart-side helper — fetches the resolved unit price for a (product, qty). */
+  quotePrice: async (productId: string, quantity: number, pharmacyId?: string): Promise<PricingQuote | null> => {
+    try { return await api.post<PricingQuote>('/pricing/quote', { productId, quantity, pharmacyId }); }
+    catch (e) { logSliceError('quote', e); return null; }
   },
 };

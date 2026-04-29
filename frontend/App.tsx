@@ -10,10 +10,12 @@ import { NotificationToast } from './components/NotificationToast';
 import { Dashboard } from './components/Dashboard';
 import { CustomerRequests } from './components/CustomerRequests';
 import { BuyingGroups } from './components/BuyingGroups';
+import { Transfers } from './components/Transfers';
+import { PricingAgreements } from './components/PricingAgreements';
 import { DataService } from './services/mockData';
 import { User, Product, Order, Notification, CartItem, UserRole, OrderStatus, RegistrationStatus } from './types';
 import { useLanguage } from './contexts/LanguageContext';
-import { LogOut, ShoppingCart, User as UserIcon, Bell, Home, Globe, LayoutGrid, ShoppingBag, Clock, Settings, CheckCircle, X, Clipboard, ExternalLink, Activity, BarChart3, Users, ShieldCheck } from 'lucide-react';
+import { LogOut, ShoppingCart, User as UserIcon, Bell, Home, Globe, LayoutGrid, ShoppingBag, Clock, Settings, CheckCircle, X, Clipboard, ExternalLink, Activity, BarChart3, Users, ShieldCheck, ArrowLeftRight, FileSignature } from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -302,6 +304,9 @@ export function App() {
       // Buying Groups tab — masters can VIEW (they appear via their child memberships) but can't act
       // (locked decision #16). Customers can act normally.
       items.push({ id: 'buying_groups', label: t('nav_buying_groups'), icon: Users });
+      // Phase D — Transfers + Agreements available to customers and masters.
+      items.push({ id: 'transfers', label: t('nav_transfers'), icon: ArrowLeftRight });
+      items.push({ id: 'agreements', label: t('nav_agreements'), icon: FileSignature });
       return items;
     }
 
@@ -310,6 +315,8 @@ export function App() {
         ...common,
         { id: 'supplier_orders', label: t('nav_orders'), icon: ShoppingBag },
         { id: 'supplier_partners', label: t('nav_partners'), icon: Globe },
+        { id: 'transfers', label: t('nav_transfers'), icon: ArrowLeftRight },
+        { id: 'agreements', label: t('nav_agreements'), icon: FileSignature },
         { id: 'supplier_reports', label: t('nav_reports'), icon: BarChart3 },
         { id: 'supplier_team', label: t('manage_team'), icon: Users },
       ];
@@ -327,7 +334,9 @@ export function App() {
     if (user.role === UserRole.ADMIN) {
       return [
         ...common,
-        { id: 'admin_portal', label: t('nav_admin'), icon: Settings }
+        { id: 'admin_portal', label: t('nav_admin'), icon: Settings },
+        { id: 'transfers', label: t('nav_transfers'), icon: ArrowLeftRight },
+        { id: 'agreements', label: t('nav_agreements'), icon: FileSignature },
       ];
     }
 
@@ -350,6 +359,10 @@ export function App() {
                 return <CustomerRequests orders={orders} currentUser={user} onUpdateOrder={handleUpdateOrder} />;
             case 'buying_groups':
                 return <BuyingGroups currentUser={user} />;
+            case 'transfers':
+                return <Transfers currentUser={user} />;
+            case 'agreements':
+                return <PricingAgreements currentUser={user} />;
             default:
                 return <Dashboard currentUser={user} orders={orders} products={products} />;
         }
@@ -358,6 +371,10 @@ export function App() {
     // Supplier Views
     if (user.role === UserRole.SUPPLIER) {
         switch(activeView) {
+            case 'transfers':
+                return <Transfers currentUser={user} />;
+            case 'agreements':
+                return <PricingAgreements currentUser={user} />;
             case 'supplier_orders':
                 return (
                     <SupplierPortal 
@@ -419,6 +436,10 @@ export function App() {
     // Foreign Supplier Views
     if (user.role === UserRole.FOREIGN_SUPPLIER) {
         switch(activeView) {
+            case 'transfers':
+                return <Transfers currentUser={user} />;
+            case 'agreements':
+                return <PricingAgreements currentUser={user} />;
             case 'foreign_reports':
                 return (
                     <SupplierPortal 
@@ -466,6 +487,8 @@ export function App() {
 
     // Admin Views
     if (user.role === UserRole.ADMIN) {
+        if (activeView === 'transfers') return <Transfers currentUser={user} />;
+        if (activeView === 'agreements') return <PricingAgreements currentUser={user} />;
         return <AdminPortal products={products} orders={orders} onUpdateProduct={handleUpdateProduct} />;
     }
 

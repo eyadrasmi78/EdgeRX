@@ -22,6 +22,7 @@ class Product extends Model
         'image', 'images', 'video',
         'bonus_threshold', 'bonus_type', 'bonus_value',
         'medical_rep_name', 'medical_rep_email', 'medical_rep_phone', 'medical_rep_whatsapp',
+        'is_cold_chain', 'is_controlled_substance', 'transfer_min_shelf_life_months',
     ];
 
     protected $casts = [
@@ -30,6 +31,9 @@ class Product extends Model
         'bonus_value' => 'decimal:2',
         'stock_level' => 'integer',
         'bonus_threshold' => 'integer',
+        'is_cold_chain' => 'boolean',
+        'is_controlled_substance' => 'boolean',
+        'transfer_min_shelf_life_months' => 'integer',
     ];
 
     protected static function booted(): void

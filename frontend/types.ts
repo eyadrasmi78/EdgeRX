@@ -240,6 +240,14 @@ export interface Order {
   /** When the order was released from a virtual buying group (Phase B). */
   buyingGroupId?: string;
   buyingGroupName?: string;
+
+  /** Phase D2 — pricing source provenance per order line. */
+  pricingSource?: 'CATALOG' | 'PROMO' | 'CONTRACT' | 'BUYING_GROUP';
+  pricingAgreementId?: string | null;
+  pricingAgreementVersion?: number | null;
+  contractedUnitPrice?: number | null;
+  catalogUnitPrice?: number | null;
+  savingsAmount?: number | null;
 }
 
 /* ───── Buying Groups (Phase B — Feature 2) ───── */
@@ -320,4 +328,149 @@ export interface Notification {
   message: string;
   type: 'success' | 'info' | 'warning';
   timestamp: number;
+}
+
+/* ───── Phase D1 — Pharmacy-to-Pharmacy Transfers ───── */
+
+export type TransferStatus =
+  | 'INITIATED'
+  | 'SUPPLIER_REVIEW'
+  | 'ACCEPTED_BY_SUPPLIER'
+  | 'B_CONFIRMED'
+  | 'QC_INTAKE'
+  | 'QC_INSPECTION'
+  | 'QC_PASSED'
+  | 'QC_FAILED'
+  | 'AWAITING_B_PAYMENT'
+  | 'RELEASED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type TransferDiscoveryMode = 'DIRECT' | 'MARKETPLACE';
+
+export interface TransferRequestItem {
+  id: number;
+  productId: string;
+  productName?: string;
+  quantity: number;
+  unitPriceRefund?: number;
+  unitPriceResale?: number;
+  lineRefund?: number;
+  lineResale?: number;
+  batchNumber: string;
+  lotNumber?: string | null;
+  expiryDate: string;
+  gs1Barcode?: string | null;
+  isColdChain?: boolean;
+  temperatureLogPath?: string | null;
+  photoPaths?: string[];
+  qcStatus: 'PENDING' | 'PASSED' | 'FAILED';
+  qcFailedReason?: string | null;
+}
+
+export interface TransferRequest {
+  id: string;
+  sourceUserId: string;
+  sourceUserName?: string;
+  targetUserId?: string | null;
+  targetUserName?: string | null;
+  supplierId: string;
+  supplierName?: string;
+  discoveryMode: TransferDiscoveryMode;
+  status: TransferStatus;
+  escrowStatus: 'NONE' | 'LOCKED' | 'RELEASED' | 'REFUNDED';
+  sourceOrderId?: string | null;
+  returnOrderId?: string | null;
+  purchaseOrderId?: string | null;
+  sourceCreditNoteNo?: string | null;
+  targetInvoiceNo?: string | null;
+  auditPdfPath?: string | null;
+  qcInspectorId?: string | null;
+  qcInspectorName?: string | null;
+  qcPassedAt?: string | null;
+  qcFailedReason?: string | null;
+  releasedAt?: string | null;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  totals: {
+    sourceRefundAmount?: number;
+    supplierFeeApplied?: number;
+    supplierFeeFlat?: number;
+    supplierFeePercent?: number;
+    targetPurchaseAmount?: number;
+  };
+  items: TransferRequestItem[];
+}
+
+/* ───── Phase D2 — Pricing Agreements ───── */
+
+export type PricingAgreementStatus =
+  | 'DRAFT'
+  | 'PENDING_CUSTOMER'
+  | 'PENDING_ADMIN'
+  | 'ACTIVE'
+  | 'EXPIRED'
+  | 'TERMINATED';
+
+export interface PricingAgreementItem {
+  id: number;
+  productId: string;
+  productName?: string;
+  productImage?: string;
+  unitOfMeasurement?: string;
+  unitPrice: number;
+  minOrderQuantity: number;
+  maxPeriodQuantity?: number | null;
+  committedPeriodQuantity?: number | null;
+  tierBreaks: { qty: number; price: number }[];
+  catalogPrice: number;
+}
+
+export interface PricingAgreement {
+  id: string;
+  agreementNumber: string;
+  customerId: string;
+  customerName?: string;
+  supplierId: string;
+  supplierName?: string;
+  status: PricingAgreementStatus;
+  version: number;
+  validFrom: string;
+  validTo: string;
+  autoRenew: boolean;
+  renewNoticeDays: number;
+  moqFallbackMode: 'FALLBACK_CATALOG' | 'BLOCK' | 'SPLIT';
+  scope: 'CUSTOMER_ONLY' | 'MASTER_AND_CHILDREN' | 'SPECIFIC_CHILDREN';
+  scopedPharmacyIds: string[];
+  bonusesApply: boolean;
+  currency: string;
+  sentToCustomerAt?: string | null;
+  signedByCustomerAt?: string | null;
+  approvedByAdminAt?: string | null;
+  approvedByAdminId?: string | null;
+  terminatedAt?: string | null;
+  terminationReason?: string | null;
+  signedPdfPath?: string | null;
+  notes?: string | null;
+  isActive: boolean;
+  isExpired: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  items: PricingAgreementItem[];
+}
+
+export interface PricingQuote {
+  unitPrice: number;
+  pricingSource: 'CATALOG' | 'CONTRACT';
+  pricingAgreementId?: string | null;
+  pricingAgreementNumber?: string | null;
+  pricingAgreementVersion?: number | null;
+  catalogUnitPrice: number;
+  contractedUnitPrice?: number | null;
+  savingsAmount: number;
+  minOrderQuantity?: number | null;
+  warning?: string | null;
+  splitRecommended?: number | null;
 }

@@ -20,6 +20,8 @@ class Order extends Model
         'quantity', 'bonus_quantity', 'unit_of_measurement',
         'status', 'decline_reason', 'date',
         'return_requested', 'return_reason', 'return_note',
+        'pricing_source', 'pricing_agreement_id', 'pricing_agreement_version',
+        'contracted_unit_price', 'catalog_unit_price', 'savings_amount',
     ];
 
     protected $casts = [
@@ -27,6 +29,10 @@ class Order extends Model
         'return_requested' => 'boolean',
         'quantity' => 'integer',
         'bonus_quantity' => 'integer',
+        'pricing_agreement_version' => 'integer',
+        'contracted_unit_price' => 'decimal:2',
+        'catalog_unit_price'    => 'decimal:2',
+        'savings_amount'        => 'decimal:2',
     ];
 
     protected static function booted(): void
@@ -59,6 +65,11 @@ class Order extends Model
     public function buyingGroup()
     {
         return $this->belongsTo(BuyingGroup::class, 'buying_group_id');
+    }
+
+    public function pricingAgreement()
+    {
+        return $this->belongsTo(PricingAgreement::class, 'pricing_agreement_id');
     }
 
     public function statusHistory()

@@ -11,7 +11,9 @@ use App\Http\Controllers\Api\OrdersController;
 use App\Http\Controllers\Api\PartnershipsController;
 use App\Http\Controllers\Api\PharmacyGroupsController;
 use App\Http\Controllers\Api\BuyingGroupsController;
+use App\Http\Controllers\Api\PricingAgreementsController;
 use App\Http\Controllers\Api\ProductsController;
+use App\Http\Controllers\Api\TransfersController;
 use App\Http\Controllers\Api\UsersController;
 use Illuminate\Support\Facades\Route;
 
@@ -106,6 +108,35 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/buying-groups/{id}/release',              [BuyingGroupsController::class, 'adminRelease']);
         Route::post('/admin/buying-groups/{id}/dissolve',             [BuyingGroupsController::class, 'adminDissolve']);
     });
+
+    // Pricing Agreements (Phase D2)
+    Route::get('/pricing-agreements',                       [PricingAgreementsController::class, 'index']);
+    Route::get('/pricing-agreements/{id}',                  [PricingAgreementsController::class, 'show']);
+    Route::post('/pricing-agreements',                      [PricingAgreementsController::class, 'store']);
+    Route::post('/pricing-agreements/{id}/send',            [PricingAgreementsController::class, 'sendToCustomer']);
+    Route::post('/pricing-agreements/{id}/sign',            [PricingAgreementsController::class, 'customerSign']);
+    Route::post('/pricing-agreements/{id}/terminate',       [PricingAgreementsController::class, 'terminate']);
+    Route::post('/pricing/quote',                           [PricingAgreementsController::class, 'quote']);
+    Route::middleware('role:ADMIN')->group(function () {
+        Route::post('/admin/pricing-agreements/{id}/approve', [PricingAgreementsController::class, 'adminApprove']);
+        Route::post('/admin/pricing-agreements/{id}/reject',  [PricingAgreementsController::class, 'adminReject']);
+    });
+
+    // Pharmacy-to-pharmacy Transfers (Phase D1)
+    Route::get('/transfers',                          [TransfersController::class, 'index']);
+    Route::get('/transfers/{id}',                     [TransfersController::class, 'show']);
+    Route::post('/transfers',                         [TransfersController::class, 'store']);
+    Route::post('/transfers/{id}/supplier/accept',    [TransfersController::class, 'supplierAccept']);
+    Route::post('/transfers/{id}/supplier/reject',    [TransfersController::class, 'supplierReject']);
+    Route::post('/transfers/{id}/target/confirm',     [TransfersController::class, 'targetConfirm']);
+    Route::post('/transfers/{id}/intake',             [TransfersController::class, 'intake']);
+    Route::post('/transfers/{id}/qc/start',           [TransfersController::class, 'qcStart']);
+    Route::post('/transfers/{id}/qc/pass',            [TransfersController::class, 'qcPass']);
+    Route::post('/transfers/{id}/qc/fail',            [TransfersController::class, 'qcFail']);
+    Route::post('/transfers/{id}/payment/confirm',    [TransfersController::class, 'confirmPayment']);
+    Route::post('/transfers/{id}/complete',           [TransfersController::class, 'complete']);
+    Route::post('/transfers/{id}/cancel',             [TransfersController::class, 'cancel']);
+    Route::get('/transfers/{id}/audit',               [TransfersController::class, 'audit']);
 
     // Notifications
     Route::get('/notifications',                  [NotificationsController::class, 'index']);

@@ -10,15 +10,19 @@ use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\OrderHistoryLog;
 use App\Models\ChatRoom;
+use App\Models\PricingAgreement;
 use App\Models\Product;
 use App\Models\User;
 use App\Notifications\EdgeRxNotification;
+use App\Services\PriceResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
+    public function __construct(private PriceResolver $resolver) {}
+
     public function index(Request $request)
     {
         $items = CartItem::with('product')
@@ -113,8 +117,25 @@ class CartController extends Controller
                 }
                 if (!$customer || !$customer->isApproved()) continue;
 
+                // Resolve contract pricing (Phase D2). Falls back to catalog if no agreement applies.
+                $priced = ['unitPrice' => (float) ($p->price ?? 0), 'pricingSource' => 'CATALOG'];
+                if ($p->supplier_id) {
+                    try {
+                        $priced = $this->resolver->resolve($customer->id, $p->supplier_id, $p->id, (int) $i->quantity);
+                    } catch (\DomainException $e) {
+                        // BLOCK mode rejects below-MOQ; bubble a clear 422 to the SPA
+                        return response()->json([
+                            'message' => "Cannot check out item {$p->name}: " . $e->getMessage(),
+                        ], 422);
+                    }
+                }
+
+                // Bonus rules: only apply if (a) catalog pricing OR (b) agreement.bonuses_apply = true
                 $bonusQty = null;
-                if ($p->bonus_threshold && $i->quantity >= $p->bonus_threshold) {
+                $applyBonus = $priced['pricingSource'] === 'CATALOG'
+                    || (($priced['pricingAgreementId'] ?? null)
+                        && PricingAgreement::find($priced['pricingAgreementId'])?->bonuses_apply);
+                if ($applyBonus && $p->bonus_threshold && $i->quantity >= $p->bonus_threshold) {
                     $bonusQty = $p->bonus_type === 'percentage'
                         ? (int) floor($i->quantity * ($p->bonus_value / 100))
                         : (int) $p->bonus_value;
@@ -135,6 +156,13 @@ class CartController extends Controller
                     'unit_of_measurement' => $p->unit_of_measurement,
                     'status' => 'Received',
                     'date' => now(),
+                    // Phase D2 — pricing source provenance
+                    'pricing_source'              => $priced['pricingSource'],
+                    'pricing_agreement_id'        => $priced['pricingAgreementId']      ?? null,
+                    'pricing_agreement_version'   => $priced['pricingAgreementVersion'] ?? null,
+                    'contracted_unit_price'       => $priced['contractedUnitPrice']     ?? null,
+                    'catalog_unit_price'          => $priced['catalogUnitPrice']        ?? null,
+                    'savings_amount'              => $priced['savingsAmount']           ?? null,
                 ]);
                 OrderHistoryLog::create([
                     'order_id' => $order->id,
