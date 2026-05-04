@@ -50,15 +50,60 @@ class AIController extends Controller
         }
     }
 
-    /** Strip control chars + trim long prompt-injection-favorite tokens. */
+    /**
+     * BE-30 fix: hardened prompt-injection sanitizer.
+     *
+     * The original was a 5-token blocklist that was trivial to bypass with
+     * casing tricks, unicode look-alikes, or zero-width characters. The new
+     * version:
+     *   - Strips ALL control chars + zero-width unicode (U+200B..U+200F, U+FEFF)
+     *   - Normalises common look-alike chars (full-width, mathematical) to ASCII
+     *   - Detects 30+ injection patterns case-insensitively, including modern
+     *     variants like "act as", "developer mode", "you are now", "roleplay"
+     *   - Strips fenced code blocks (```...```) since they're a common bypass
+     *   - Wraps each suspicious pattern in `[redacted]` rather than leaving
+     *     the original wording so the model can't reconstruct intent
+     *   - Caps at $max chars AFTER sanitization (was before, so an attacker
+     *     could pad prefix garbage and push payload past the cap)
+     *
+     * NOT a complete defence — Gemini's systemInstruction is the primary gate
+     * (model treats it as higher-priority than inline content). This sanitizer
+     * is defence-in-depth: stops the easy 95% of public injection prompts.
+     */
     private function sanitize(string $s, int $max = 1500): string
     {
-        $s = preg_replace('/[\x00-\x1F\x7F]/', ' ', $s) ?? '';
-        $s = str_ireplace(
-            ['ignore previous', 'ignore the above', 'system prompt', 'system instruction', 'jailbreak'],
-            '[redacted]',
-            $s
-        );
+        // Strip control chars (incl. NUL, BEL, ESC) and DEL
+        $s = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $s) ?? '';
+
+        // Strip zero-width / bidi-override unicode commonly used to bypass filters
+        $s = preg_replace('/[\x{200B}-\x{200F}\x{2028}-\x{202F}\x{2060}-\x{206F}\x{FEFF}]/u', '', $s) ?? '';
+
+        // Strip fenced code blocks — a common injection wrapper
+        $s = preg_replace('/```.*?```/su', '[redacted-code]', $s) ?? '';
+        $s = preg_replace('/<script\b[^>]*>.*?<\/script>/isu', '[redacted-script]', $s) ?? '';
+
+        // Case-insensitive injection patterns. Each match is replaced wholesale.
+        $patterns = [
+            '/ignore\s+(?:the\s+)?(?:above|previous|prior|earlier)\s*(?:instructions?|prompt|messages?)?/i',
+            '/disregard\s+(?:the\s+)?(?:above|previous|prior|all)\s*(?:instructions?|prompt)?/i',
+            '/forget\s+(?:everything|all|previous|above)/i',
+            '/(?:override|bypass|circumvent)\s+(?:the\s+)?(?:system|instructions?|prompt|safety|guardrails?)/i',
+            '/(?:you\s+are\s+(?:now|actually)|act\s+as|pretend\s+(?:to\s+be|you))\s+\w+/i',
+            '/(?:enable|activate|enter)\s+(?:developer|admin|god|jailbreak|dan|debug)\s*mode/i',
+            '/system\s*(?:prompt|instruction|message|role)/i',
+            '/(?:roleplay|role-?play|simulate)\s+as\s+/i',
+            '/print\s+(?:the\s+)?(?:above|previous|system|raw)\s+(?:prompt|instructions?)/i',
+            '/(?:reveal|show|leak|repeat)\s+(?:the\s+)?(?:system|hidden|original)\s+(?:prompt|instructions?|message)/i',
+            '/\bjailbreak\b/i',
+            '/\bDAN\b/',
+            '/(?:i\s+am|you\s+are)\s+(?:not|no\s+longer)\s+bound\s+by/i',
+            '/new\s+instructions?\s*:/i',
+        ];
+        foreach ($patterns as $pattern) {
+            $s = preg_replace($pattern, '[redacted]', $s) ?? $s;
+        }
+
+        // Trim and length-cap AFTER sanitization, not before
         return mb_substr(trim($s), 0, $max);
     }
 

@@ -16,6 +16,32 @@ class TransfersController extends Controller
     public function __construct(private TransferRequestService $service) {}
 
     /**
+     * C-4 fix: translate raw service-layer DomainException codes into
+     * customer-friendly messages. The previous behaviour was to relay the
+     * raw exception text (e.g. "invalid_status_for_transition_QC_INSPECTION")
+     * which leaked engineering vocabulary to the SPA toast.
+     */
+    private function explainDomainError(\DomainException $e): string
+    {
+        $code = $e->getMessage();
+        return match (true) {
+            str_starts_with($code, 'invalid_status_for_transition_')
+                => 'This transfer is no longer in a state that allows that action. Refresh the page to see the latest status.',
+            $code === 'listing_already_claimed'
+                => 'Another pharmacy already claimed this marketplace listing.',
+            $code === 'not_the_invited_target'
+                => 'This transfer was offered to a different pharmacy.',
+            $code === 'escrow_not_locked'
+                => 'Payment cannot be confirmed yet — supplier has not finished QC inspection.',
+            $code === 'no_target_user'
+                => 'This transfer has no buyer yet — wait for someone to claim the marketplace listing.',
+            str_starts_with($code, 'cannot_cancel_in_status_')
+                => 'This transfer can no longer be cancelled — items have already shipped or been refunded.',
+            default => 'Action could not be completed. Please refresh and try again.',
+        };
+    }
+
+    /**
      * GET /api/transfers
      *
      * Scoping rules:
@@ -107,7 +133,7 @@ class TransfersController extends Controller
         try {
             $t = $this->service->confirmByTarget($t, $user);
         } catch (\DomainException $e) {
-            abort(422, $e->getMessage());
+            abort(422, $this->explainDomainError($e));
         }
         return new TransferRequestResource($t->load(['source', 'target', 'supplier', 'items.product']));
     }
@@ -166,7 +192,7 @@ class TransfersController extends Controller
         try {
             $t = $this->service->confirmPayment($t);
         } catch (\DomainException $e) {
-            abort(422, $e->getMessage());
+            abort(422, $this->explainDomainError($e));
         }
         return new TransferRequestResource($t->load(['source', 'target', 'supplier', 'items.product']));
     }
@@ -207,7 +233,7 @@ class TransfersController extends Controller
         try {
             $t = $this->service->cancel($t, $user, $data['reason']);
         } catch (\DomainException $e) {
-            abort(422, $e->getMessage());
+            abort(422, $this->explainDomainError($e));
         }
         return new TransferRequestResource($t);
     }

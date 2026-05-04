@@ -257,6 +257,22 @@ class PricingAgreementsController extends Controller
         ]);
 
         $forUserId = $data['pharmacyId'] ?? $u->id;
+
+        // BE-8 fix: when a Pharmacy Master asks for a quote on behalf of a
+        // pharmacyId, that pharmacy MUST be one of their child accounts.
+        // Without this gate, a master could probe contract pricing for any
+        // pharmacy in the system — a privacy leak (reveals which suppliers
+        // a competing pharmacy has agreements with, and at what price).
+        if ($forUserId !== $u->id) {
+            // Anyone other than self requires master + ownership.
+            if (!$u->isPharmacyMaster() || !$u->ownsPharmacy($forUserId)) {
+                return response()->json([
+                    'message' => 'You do not own that pharmacy and cannot request quotes for it.',
+                    'errors'  => ['pharmacyId' => ['Forbidden — pharmacy not under your management.']],
+                ], 403);
+            }
+        }
+
         $product = Product::findOrFail($data['productId']);
         $supplierId = $product->supplier_id;
         if (!$supplierId) abort(422, 'Product has no supplier.');
